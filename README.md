@@ -31,33 +31,96 @@ In the `.github/workflows/publish-blog.yml` file, replace the placeholder for th
 
 To write a new blog post, simply create a new Markdown file (`.md`) inside the `/posts` directory. The name of the file will become the URL slug for your post (e.g., `my-first-post.md`).
 
-**B. Use the Frontmatter Template:**
+**B. Use the Unified Frontmatter Template:**
 
-At the very top of your new Markdown file, include a frontmatter block. This metadata is essential for how your post will appear on each platform.
+At the very top of your new Markdown file, include a YAML frontmatter block. This metadata is essential for how your post will appear on each platform. Using a unified template ensures that Hashnode, dev.to, and the Medium GitHub Action can all read the necessary metadata.
 
-Here is the recommended template. Copy and paste this at the top of each new post and fill in the details:
+A template file `posts/template.md` is provided in this repository. Copy the content of this file for your new blog posts.
 
 ```yaml
 ---
-title: "Your Awesome Post Title"
-description: "A short, compelling summary of your article. This is often used for social media previews."
-tags: "tech, programming, go, development"
+# Shared core metadata
+title: "Building a Flutter A11y Linter That Actually Understands Semantics"
+subtitle: "How I designed a semantic IR and 20+ accessibility rules for Flutter"
+description: "Deep dive into building a semantics-first accessibility linter for Flutter with a custom IR and rule engine."
+
+# Hashnode-specific (required for GitHub-as-source)
+slug: flutter-a11y-linter-semantics-ir
+domain: your-blog.hashnode.dev
+
+# Tags (works for all three)
+# - Hashnode: up to 5 tags (slugs)
+# - dev.to: first 4 tags used
+# - Medium: action treats this as tags list (comma-separated)
+tags: flutter, accessibility, dart, a11y
+
+# Canonical URL
+# - Hashnode: uses `canonical`
+# - dev.to: uses `canonical_url`
+# - Medium: action reads `canonical_url`
+canonical: https://your-blog.hashnode.dev/flutter-a11y-linter-semantics-ir
+canonical_url: https://your-blog.hashnode.dev/flutter-a11y-linter-semantics-ir
+
+# Cover images
+# - Hashnode: `cover`
+# - dev.to: `cover_image`
+cover: https://cdn.hashnode.com/res/hashnode/image/upload/v1234567890/flutter-a11y-cover.png
+cover_image: https://cdn.hashnode.com/res/hashnode/image/upload/v1234567890/flutter-a11y-cover.png
+
+# Series / grouping (optional)
+series: flutter-a11y-series
+seriesSlug: flutter-a11y-series  # Hashnode series support
+
+# Publish/draft flags
+# - dev.to: `published`
+# - Hashnode: `saveAsDraft` (false = publish)
+# - Medium: via action `publish_status` (can also be in frontmatter)
 published: true
-canonical_url: "https://your-blog.hashnode.dev/your-post-slug"
+saveAsDraft: false
+publish_status: public
+
+# Hashnode extra SEO goodies (optional, but nice)
+seoTitle: "Flutter Accessibility Linter with Semantic IR (A11y for Real Apps)"
+seoDescription: "A practical, semantics-aware Flutter accessibility linter: image roles, tap targets, hidden focus traps, and more."
+enableToc: true
 ---
-
-## Your Post Starts Here
-
-Start writing your amazing blog post content in Markdown below the frontmatter.
 ```
 
-**Frontmatter Explained:**
+### Why this works
 
-- **`title`**: The title of your article.
-- **`description`**: A brief summary used for SEO and social sharing.
-- **`tags`**: A comma-separated list of tags for your post.
-- **`published`**: Set to `true` for dev.to to publish the article immediately.
-- **`canonical_url`**: **Very Important for SEO!** This tells search engines that the primary version of your article is on your Hashnode blog. This should be the final URL of your post on your main blog (which you should set to Hashnode for this setup).
+*   **Hashnode**:
+    *   Uses `title`, `slug`, `tags`, `domain` as required fields.
+    *   Uses `canonical` as the original URL (when republishing elsewhere).
+    *   Ignores unknown fields like `published`, `cover_image`, `canonical_url`, `publish_status`.
+
+*   **dev.to**:
+    *   Uses `title`, `published`, `tags`, `canonical_url`, `cover_image`, `series`.
+    *   Ignores Hashnode-specific fields like `domain`, `slug`, `seoTitle`, etc.
+
+*   **Medium (action)**:
+    *   With `parse_frontmatter: "true"`, it reads `title`, `tags`, `canonical_url`, and `publish_status`.
+    *   Ignores extra fields without breaking.
+
+The “extra” fields are harmless on platforms that don’t recognize them.
+
+### A few practical guidelines
+
+1.  **Pick your canonical “home” once.**
+    *   This should be your **Hashnode** blog.
+    *   Both `canonical` and `canonical_url` should point to your Hashnode URL.
+
+2.  **Keep tags ≤ 4–5 and ordered by importance.**
+    *   dev.to uses the **first 4** tags.
+    *   Medium and Hashnode use **up to 5**.
+    *   Put your *best* tags first.
+
+3.  **Use the same cover image URL everywhere.**
+    *   Use a stable URL (Hashnode CDN, your own site, or an S3 bucket).
+    *   Set both `cover` and `cover_image` to it.
+
+4.  **Control drafts per platform via workflow settings.**
+    *   You can leave `publish_status: draft` for Medium at first, even if `published: true` for dev.to and `saveAsDraft: false` for Hashnode.
+    *   Or override per-platform in your GitHub Action inputs.
 
 ### 3. The Automation
 
@@ -67,6 +130,6 @@ The GitHub Action will automatically:
 1.  Detect the new or updated post in the `/posts` directory.
 2.  Publish it to your Hashnode blog.
 3.  Publish it to your dev.to account.
-4.  Publish the specific file `posts/example-post.md` to Medium (you can update this in the workflow file or enhance the workflow to detect the latest changed file).
+4.  Publish it to Medium.
 
 Your repository is now a single source of truth for all your technical articles!
