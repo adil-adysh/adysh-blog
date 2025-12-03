@@ -1,0 +1,61 @@
+name: Publish blog to Hashnode, dev.to and Medium
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "posts/**/*.md"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # 1) Publish to Hashnode
+      # Uses raunakgurud09/hashnode-publish
+      # Docs: GitHub Marketplace -> "Hashnode publish"
+      - name: Publish to Hashnode
+        uses: raunakgurud09/hashnode-publish@v2
+        with:
+          # Your Hashnode blog URL, e.g. https://adil.hashnode.dev
+          host: "https://<your-hashnode-blog>.hashnode.dev"
+          # All markdown posts
+          file: "posts/**/*.md"
+          # Secret from Hashnode developer settings
+          hashnode_key: ${{ secrets.HASHNODE_KEY }}
+
+      # 2) Publish / sync to dev.to
+      # Uses sinedied/publish-devto
+      # Docs: GitHub Marketplace -> "Publish to dev.to"
+      - name: Publish to dev.to
+        uses: sinedied/publish-devto@v2
+        with:
+          devto_key: ${{ secrets.DEVTO_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Same folder of posts
+          files: "posts/**/*.md"
+          branch: main
+          conventional_commits: true
+          dry_run: false
+
+      # 3) Publish to Medium
+      # Uses philips-software/post-to-medium-action
+      # NOTE: this action takes a single file path. You can:
+      #  - hard-code a file
+      #  - or later extend this with a script that finds "latest changed" post.
+      - name: Publish latest post to Medium
+        if: always()
+        uses: philips-software/post-to-medium-action@v0.6.0
+        with:
+          integration_token: ${{ secrets.MEDIUM_INTEGRATION_TOKEN }}
+          # TODO: point this to the specific markdown you want to publish
+          file: "posts/example-post.md"
+          content_format: "markdown"
+          # Let frontmatter control title/tags/canonical_url if you want
+          parse_frontmatter: "true"
+          # These are fallbacks if frontmatter doesn't override them
+          publish_status: "public"
+          notify_followers: "true"
