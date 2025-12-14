@@ -1,61 +1,195 @@
-name: Publish blog to Hashnode, dev.to and Medium
+name: Router Publish (Tech & Personal)
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "posts/**/*.md"
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
-      # 1) Publish to Hashnode
-      # Uses raunakgurud09/hashnode-publish
-      # Docs: GitHub Marketplace -> "Hashnode publish"
-      - name: Publish to Hashnode
-        uses: raunakgurud09/hashnode-publish@v2
         with:
-          # Your Hashnode blog URL, e.g. https://adil.hashnode.dev
-          host: "https://<your-hashnode-blog>.hashnode.dev"
-          # All markdown posts
-          file: "posts/**/*.md"
-          # Secret from Hashnode developer settings
-          hashnode_key: ${{ secrets.HASHNODE_KEY }}
+          fetch-depth: 2
 
-      # 2) Publish / sync to dev.to
-      # Uses sinedied/publish-devto
-      # Docs: GitHub Marketplace -> "Publish to dev.to"
-      - name: Publish to dev.to
+      # ---------------------------------------------------------
+      # STEP 1: Categorize Changes
+      # ---------------------------------------------------------
+      - name: Detect File Changes
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files_yaml: |
+            tech:
+              - posts/tech/**/*.md
+            personal:
+              - posts/personal/**/*.md
+
+      # ---------------------------------------------------------
+      # STEP 2: ROUTE A -> Tech Blog
+      # ---------------------------------------------------------
+      - name: Publish to Tech Hashnode
+        if: steps.changed-files.outputs.tech_any_changed == 'true'
+        uses: actions/github-script@v7
+        env:
+          HASHNODE_PAT: ${{ secrets.HASHNODE_KEY }}
+          PUBLICATION_ID: "68680814547d9d1973438df5"
+          FILES: ${{ steps.changed-files.outputs.tech_all_changed_files }}
+          REPO: ${{ github.repository }}
+          BRANCH: main
+        with:
+          script: |
+            const fs = require('fs');
+
+            // CONFIGURATION
+            const REPO = process.env.REPO;
+            const BRANCH = process.env.BRANCH;
+            // CHANGE: Using 'blob' structure as requested
+            const BASE_BLOB_URL = `https://github.com/${REPO}/blob/${BRANCH}`;
+
+            const files = process.env.FILES.split(' ').filter(f => f.length > 0);
+
+            // --- HELPER: Fix Image URLs ---
+            function fixImageUrls(content) {
+              return content.replace(/!\[(.*?)\]\((.*?)\)/g, (match, alt, imgPath) => {
+                
+                // 1. Ignore if already a web link
+                if (imgPath.startsWith('http')) return match;
+
+                // 2. Detect Asset Links (e.g., "../assets/3 step learning.png")
+                if (imgPath.includes('assets/')) {
+                   const fileName = imgPath.split('assets/')[1]; 
+                   
+                   // Encode spaces to %20
+                   const cleanFileName = fileName.trim().replace(/ /g, '%20');
+                   
+                   // Construct URL: github.com/.../blob/main/.../image.png?raw=true
+                   const newUrl = `${BASE_BLOB_URL}/posts/assets/${cleanFileName}?raw=true`;
+                   
+                   console.log(`   🔗 Fixed Image: ${fileName} -> ${newUrl}`);
+                   return `![${alt}](${newUrl})`;
+                }
+                return match;
+              });
+            }
+
+            // --- MAIN LOOP ---
+            for (const filePath of files) {
+              if (!fs.existsSync(filePath)) continue;
+              console.log(`\n🚀 Processing Tech Post: ${filePath}`);
+              
+              let content = fs.readFileSync(filePath, 'utf8');
+              content = fixImageUrls(content);
+
+              const match = content.match(/^---\n([\s\S]+?)\n---\n([\s\S]*)$/);
+              if (!match) { console.log('Skipping: Invalid Frontmatter'); continue; }
+              
+              const frontmatterRaw = match[1];
+              const body = match[2];
+              const title = frontmatterRaw.match(/title:\s*(.*)/)?.[1].trim() || 'Untitled';
+              const tagsMatch = frontmatterRaw.match(/tags:\s*\[(.*)\]/);
+              let tags = tagsMatch ? tagsMatch[1].split(',').map(t => ({ name: t.trim().replace(/['"]/g, '') })) : [];
+
+              const query = `mutation PublishPost($input: PublishPostInput!) { publishPost(input: $input) { post { url } } }`;
+              const variables = { input: { title, contentMarkdown: body, publicationId: process.env.PUBLICATION_ID, tags } };
+              
+              try {
+                const response = await fetch('https://gql.hashnode.com', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': process.env.HASHNODE_PAT },
+                  body: JSON.stringify({ query, variables })
+                });
+                const result = await response.json();
+                if (result.errors) {
+                  console.error(`❌ Errors:`, JSON.stringify(result.errors));
+                  core.setFailed("Hashnode API Error");
+                } else {
+                  console.log(`✅ Published: ${result.data.publishPost.post.url}`);
+                }
+              } catch (e) { core.setFailed(e.message); }
+            }
+
+      - name: Publish Tech to Dev.to
+        if: steps.changed-files.outputs.tech_any_changed == 'true'
         uses: sinedied/publish-devto@v2
         with:
           devto_key: ${{ secrets.DEVTO_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # Same folder of posts
-          files: "posts/**/*.md"
-          branch: main
+          files: "posts/tech/**/*.md"
           conventional_commits: true
-          dry_run: false
 
-      # 3) Publish to Medium
-      # Uses philips-software/post-to-medium-action
-      # NOTE: this action takes a single file path. You can:
-      #  - hard-code a file
-      #  - or later extend this with a script that finds "latest changed" post.
-      - name: Publish latest post to Medium
-        if: always()
-        uses: philips-software/post-to-medium-action@v0.6.0
+      # ---------------------------------------------------------
+      # STEP 3: ROUTE B -> Personal Blog
+      # ---------------------------------------------------------
+      - name: Publish to Personal Hashnode
+        if: steps.changed-files.outputs.personal_any_changed == 'true'
+        uses: actions/github-script@v7
+        env:
+          HASHNODE_PAT: ${{ secrets.HASHNODE_KEY }}
+          PUBLICATION_ID: "6868ff285f48b91eefdfb337"
+          FILES: ${{ steps.changed-files.outputs.personal_all_changed_files }}
+          REPO: ${{ github.repository }}
+          BRANCH: main
         with:
-          integration_token: ${{ secrets.MEDIUM_INTEGRATION_TOKEN }}
-          # TODO: point this to the specific markdown you want to publish
-          file: "posts/example-post.md"
-          content_format: "markdown"
-          # Let frontmatter control title/tags/canonical_url if you want
-          parse_frontmatter: "true"
-          # These are fallbacks if frontmatter doesn't override them
-          publish_status: "public"
-          notify_followers: "true"
+          script: |
+            // EXACT DUPLICATE OF TECH SCRIPT
+            const fs = require('fs');
+            const REPO = process.env.REPO;
+            const BRANCH = process.env.BRANCH;
+            const BASE_BLOB_URL = `https://github.com/${REPO}/blob/${BRANCH}`;
+            const files = process.env.FILES.split(' ').filter(f => f.length > 0);
+
+            function fixImageUrls(content) {
+              return content.replace(/!\[(.*?)\]\((.*?)\)/g, (match, alt, imgPath) => {
+                if (imgPath.startsWith('http')) return match;
+                if (imgPath.includes('assets/')) {
+                   const fileName = imgPath.split('assets/')[1];
+                   const cleanFileName = fileName.trim().replace(/ /g, '%20');
+                   const newUrl = `${BASE_BLOB_URL}/posts/assets/${cleanFileName}?raw=true`;
+                   console.log(`   🔗 Fixed Image: ${fileName} -> ${newUrl}`);
+                   return `![${alt}](${newUrl})`;
+                }
+                return match;
+              });
+            }
+
+            for (const filePath of files) {
+              if (!fs.existsSync(filePath)) continue;
+              console.log(`\n🚀 Processing Personal Post: ${filePath}`);
+              
+              let content = fs.readFileSync(filePath, 'utf8');
+              content = fixImageUrls(content);
+              
+              const match = content.match(/^---\n([\s\S]+?)\n---\n([\s\S]*)$/);
+              if (!match) continue;
+              
+              const frontmatterRaw = match[1];
+              const body = match[2];
+              const title = frontmatterRaw.match(/title:\s*(.*)/)?.[1].trim() || 'Untitled';
+              const tagsMatch = frontmatterRaw.match(/tags:\s*\[(.*)\]/);
+              let tags = tagsMatch ? tagsMatch[1].split(',').map(t => ({ name: t.trim().replace(/['"]/g, '') })) : [];
+
+              const query = `mutation PublishPost($input: PublishPostInput!) { publishPost(input: $input) { post { url } } }`;
+              const variables = { input: { title, contentMarkdown: body, publicationId: process.env.PUBLICATION_ID, tags } };
+              
+              try {
+                const response = await fetch('https://gql.hashnode.com', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': process.env.HASHNODE_PAT },
+                  body: JSON.stringify({ query, variables })
+                });
+                const result = await response.json();
+                if (result.errors) {
+                  console.error(`❌ Errors:`, JSON.stringify(result.errors));
+                  core.setFailed("Hashnode API Error");
+                } else {
+                  console.log(`✅ Published: ${result.data.publishPost.post.url}`);
+                }
+              } catch (e) { core.setFailed(e.message); }
+            }
