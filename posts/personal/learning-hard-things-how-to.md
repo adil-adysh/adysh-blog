@@ -316,3 +316,4 @@ It’s about designing a system your brain doesn’t need to fight.
 
 And when safety replaces pressure,  
 complexity becomes something you can grow into—steadily, quietly, and for a long time.
+
