@@ -152,11 +152,21 @@ jobs:
 
             function tagsToHashnodeTags(tagsValue) {
               if (!tagsValue) return [];
+              function slugify(input) {
+                return input
+                  .toString()
+                  .trim()
+                  .toLowerCase()
+                  .replace(/\s+/g, '-')
+                  .replace(/[^a-z0-9-]/g, '')
+                  .replace(/-+/g, '-');
+              }
+
               if (Array.isArray(tagsValue)) {
                 return tagsValue
                   .map(t => (t ?? '').toString().trim())
                   .filter(Boolean)
-                  .map(name => ({ name }));
+                  .map(name => ({ name, slug: slugify(name) }));
               }
               const asString = (tagsValue ?? '').toString().trim();
               if (!asString) return [];
@@ -164,7 +174,7 @@ jobs:
                 .split(',')
                 .map(t => t.trim())
                 .filter(Boolean)
-                .map(name => ({ name }));
+                .map(name => ({ name, slug: slugify(name) }));
             }
 
             function extractUnknownPublishPostInputFields(errors) {
@@ -404,11 +414,21 @@ jobs:
 
             function tagsToHashnodeTags(tagsValue) {
               if (!tagsValue) return [];
+              function slugify(input) {
+                return input
+                  .toString()
+                  .trim()
+                  .toLowerCase()
+                  .replace(/\s+/g, '-')
+                  .replace(/[^a-z0-9-]/g, '')
+                  .replace(/-+/g, '-');
+              }
+
               if (Array.isArray(tagsValue)) {
                 return tagsValue
                   .map(t => (t ?? '').toString().trim())
                   .filter(Boolean)
-                  .map(name => ({ name }));
+                  .map(name => ({ name, slug: slugify(name) }));
               }
               const asString = (tagsValue ?? '').toString().trim();
               if (!asString) return [];
@@ -416,7 +436,7 @@ jobs:
                 .split(',')
                 .map(t => t.trim())
                 .filter(Boolean)
-                .map(name => ({ name }));
+                .map(name => ({ name, slug: slugify(name) }));
             }
 
             function extractUnknownPublishPostInputFields(errors) {
