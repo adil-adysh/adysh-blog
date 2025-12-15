@@ -47,72 +47,235 @@ jobs:
           script: |
             const fs = require('fs');
 
-            // CONFIGURATION
             const REPO = process.env.REPO;
             const BRANCH = process.env.BRANCH;
-            // CHANGE: Using 'blob' structure as requested
             const BASE_BLOB_URL = `https://github.com/${REPO}/blob/${BRANCH}`;
-
             const files = process.env.FILES.split(' ').filter(f => f.length > 0);
 
-            // --- HELPER: Fix Image URLs ---
-            function fixImageUrls(content) {
-              return content.replace(/!\[(.*?)\]\((.*?)\)/g, (match, alt, imgPath) => {
-                
-                // 1. Ignore if already a web link
-                if (imgPath.startsWith('http')) return match;
+            function unquote(value) {
+              const v = (value ?? '').trim();
+              if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+                return v.slice(1, -1);
+              }
+              return v;
+            }
 
-                // 2. Detect Asset Links (e.g., "../assets/3 step learning.png")
+            function encodePathSegments(path) {
+              return path
+                .split('/')
+                .filter(Boolean)
+                .map(seg => encodeURIComponent(seg))
+                .join('/');
+            }
+
+            function assetPathToRawUrl(anyPath) {
+              const imgPath = (anyPath ?? '').trim();
+              if (!imgPath || imgPath.startsWith('http')) return imgPath;
+              const idx = imgPath.indexOf('assets/');
+              if (idx === -1) return imgPath;
+              const afterAssets = imgPath.slice(idx + 'assets/'.length).trim();
+              const encoded = encodePathSegments(afterAssets);
+              return `${BASE_BLOB_URL}/posts/assets/${encoded}?raw=true`;
+            }
+
+            function fixImageUrlsInMarkdown(content) {
+              return content.replace(/!\[(.*?)\]\((.*?)\)/g, (match, alt, imgPath) => {
+                if (imgPath.startsWith('http')) return match;
                 if (imgPath.includes('assets/')) {
-                   const fileName = imgPath.split('assets/')[1]; 
-                   
-                   // Encode spaces to %20
-                   const cleanFileName = fileName.trim().replace(/ /g, '%20');
-                   
-                   // Construct URL: github.com/.../blob/main/.../image.png?raw=true
-                   const newUrl = `${BASE_BLOB_URL}/posts/assets/${cleanFileName}?raw=true`;
-                   
-                   console.log(`   🔗 Fixed Image: ${fileName} -> ${newUrl}`);
-                   return `![${alt}](${newUrl})`;
+                  const newUrl = assetPathToRawUrl(imgPath);
+                  console.log(`   🔗 Fixed Image: ${imgPath} -> ${newUrl}`);
+                  return `![${alt}](${newUrl})`;
                 }
                 return match;
               });
             }
 
-            // --- MAIN LOOP ---
+            function splitFrontmatter(content) {
+              const match = content.match(/^---\r?\n([\s\S]+?)\r?\n---\r?\n([\s\S]*)$/);
+              if (!match) return null;
+              return { frontmatterRaw: match[1], body: match[2] };
+            }
+
+            // Minimal YAML-ish parser for our frontmatter shape:
+            // - key: value
+            // - key: [a, b]
+            // - key:\n  - a\n  - b
+            function parseFrontmatter(raw) {
+              const lines = raw.split(/\r?\n/);
+              const out = {};
+              for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                if (!line.trim() || line.trim().startsWith('#')) continue;
+                const m = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
+                if (!m) continue;
+                const key = m[1];
+                const rest = (m[2] ?? '').trim();
+
+                if (rest === '') {
+                  const list = [];
+                  let j = i + 1;
+                  while (j < lines.length) {
+                    const l = lines[j];
+                    if (!l.trim()) { j++; continue; }
+                    if (/^[A-Za-z0-9_]+:/.test(l)) break;
+                    const item = l.match(/^\s*-\s+(.*)$/);
+                    if (!item) break;
+                    list.push(unquote(item[1]));
+                    j++;
+                  }
+                  if (list.length) {
+                    out[key] = list;
+                    i = j - 1;
+                  } else {
+                    out[key] = '';
+                  }
+                  continue;
+                }
+
+                if (rest.startsWith('[') && rest.endsWith(']')) {
+                  const inner = rest.slice(1, -1).trim();
+                  if (!inner) {
+                    out[key] = [];
+                    continue;
+                  }
+                  out[key] = inner
+                    .split(',')
+                    .map(v => unquote(v.trim()))
+                    .filter(Boolean);
+                  continue;
+                }
+
+                out[key] = unquote(rest);
+              }
+              return out;
+            }
+
+            function tagsToHashnodeTags(tagsValue) {
+              if (!tagsValue) return [];
+              if (Array.isArray(tagsValue)) {
+                return tagsValue
+                  .map(t => (t ?? '').toString().trim())
+                  .filter(Boolean)
+                  .map(name => ({ name }));
+              }
+              const asString = (tagsValue ?? '').toString().trim();
+              if (!asString) return [];
+              return asString
+                .split(',')
+                .map(t => t.trim())
+                .filter(Boolean)
+                .map(name => ({ name }));
+            }
+
+            function extractUnknownPublishPostInputFields(errors) {
+              const unknown = [];
+              for (const err of (errors ?? [])) {
+                const msg = (err && err.message) ? String(err.message) : '';
+
+                // Example: Field "coverImageOptions" is not defined by type PublishPostInput.
+                const m1 = msg.match(/Field "([A-Za-z0-9_]+)" is not defined by type PublishPostInput/);
+                if (m1) unknown.push(m1[1]);
+
+                // Some servers mention just "Field \"x\" is not defined" without the type.
+                const m2 = msg.match(/Field "([A-Za-z0-9_]+)" is not defined/);
+                if (m2) unknown.push(m2[1]);
+              }
+              return Array.from(new Set(unknown));
+            }
+
+            async function publishPostSmart(baseInput, coverUrl) {
+              const query = `mutation PublishPost($input: PublishPostInput!) { publishPost(input: $input) { post { url } } }`;
+
+              const coverVariants = coverUrl ? [
+                input => ({ ...input, coverImageOptions: { coverImageURL: coverUrl } }),
+                input => ({ ...input, coverImageOptions: { coverImageUrl: coverUrl } }),
+                input => ({ ...input, coverImageURL: coverUrl }),
+                input => ({ ...input, coverImageUrl: coverUrl }),
+                input => ({ ...input, coverImage: coverUrl }),
+              ] : [input => ({ ...input })];
+
+              let lastErrors = null;
+
+              for (const applyCover of coverVariants) {
+                let input = applyCover({ ...baseInput });
+
+                // Strip unknown optional fields iteratively (slug/subtitle/canonicalUrl/cover fields)
+                for (let attempt = 0; attempt < 6; attempt++) {
+                  const variables = { input };
+                  const response = await fetch('https://gql.hashnode.com', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': process.env.HASHNODE_PAT,
+                    },
+                    body: JSON.stringify({ query, variables }),
+                  });
+                  const result = await response.json();
+
+                  if (!result.errors) return result;
+                  lastErrors = result.errors;
+
+                  const unknown = extractUnknownPublishPostInputFields(result.errors);
+                  if (!unknown.length) break;
+
+                  for (const field of unknown) {
+                    delete input[field];
+                    if (field === 'coverImageOptions') {
+                      delete input.coverImageURL;
+                      delete input.coverImageUrl;
+                      delete input.coverImage;
+                    }
+                  }
+                }
+              }
+
+              return { errors: lastErrors };
+            }
+
             for (const filePath of files) {
               if (!fs.existsSync(filePath)) continue;
               console.log(`\n🚀 Processing Tech Post: ${filePath}`);
-              
-              let content = fs.readFileSync(filePath, 'utf8');
-              content = fixImageUrls(content);
 
-              const match = content.match(/^---\n([\s\S]+?)\n---\n([\s\S]*)$/);
-              if (!match) { console.log('Skipping: Invalid Frontmatter'); continue; }
-              
-              const frontmatterRaw = match[1];
-              const body = match[2];
-              const title = frontmatterRaw.match(/title:\s*(.*)/)?.[1].trim() || 'Untitled';
-              const tagsMatch = frontmatterRaw.match(/tags:\s*\[(.*)\]/);
-              let tags = tagsMatch ? tagsMatch[1].split(',').map(t => ({ name: t.trim().replace(/['"]/g, '') })) : [];
+              const raw = fs.readFileSync(filePath, 'utf8');
+              const parts = splitFrontmatter(raw);
+              if (!parts) {
+                console.log('Skipping: Invalid Frontmatter');
+                continue;
+              }
 
-              const query = `mutation PublishPost($input: PublishPostInput!) { publishPost(input: $input) { post { url } } }`;
-              const variables = { input: { title, contentMarkdown: body, publicationId: process.env.PUBLICATION_ID, tags } };
-              
+              const fm = parseFrontmatter(parts.frontmatterRaw);
+              const title = (fm.title ?? 'Untitled').toString().trim() || 'Untitled';
+              const tags = tagsToHashnodeTags(fm.tags);
+
+              let body = fixImageUrlsInMarkdown(parts.body);
+
+              // Accept either `cover` or `coverImage` in frontmatter.
+              const coverValue = fm.cover ?? fm.coverImage ?? '';
+              const coverUrl = assetPathToRawUrl(coverValue);
+
+              const baseInput = {
+                title,
+                contentMarkdown: body,
+                publicationId: process.env.PUBLICATION_ID,
+                tags,
+              };
+
+              // Optional fields (will be stripped if not supported by the API)
+              if (fm.slug) baseInput.slug = fm.slug;
+              if (fm.subtitle) baseInput.subtitle = fm.subtitle;
+              if (fm.canonicalUrl) baseInput.canonicalUrl = fm.canonicalUrl;
+
               try {
-                const response = await fetch('https://gql.hashnode.com', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'Authorization': process.env.HASHNODE_PAT },
-                  body: JSON.stringify({ query, variables })
-                });
-                const result = await response.json();
+                const result = await publishPostSmart(baseInput, coverUrl);
                 if (result.errors) {
                   console.error(`❌ Errors:`, JSON.stringify(result.errors));
-                  core.setFailed("Hashnode API Error");
+                  core.setFailed('Hashnode API Error');
                 } else {
                   console.log(`✅ Published: ${result.data.publishPost.post.url}`);
                 }
-              } catch (e) { core.setFailed(e.message); }
+              } catch (e) {
+                core.setFailed(e.message);
+              }
             }
 
       - name: Publish Tech to Dev.to
@@ -138,58 +301,224 @@ jobs:
           BRANCH: main
         with:
           script: |
-            // EXACT DUPLICATE OF TECH SCRIPT
             const fs = require('fs');
+
             const REPO = process.env.REPO;
             const BRANCH = process.env.BRANCH;
             const BASE_BLOB_URL = `https://github.com/${REPO}/blob/${BRANCH}`;
             const files = process.env.FILES.split(' ').filter(f => f.length > 0);
 
-            function fixImageUrls(content) {
+            function unquote(value) {
+              const v = (value ?? '').trim();
+              if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+                return v.slice(1, -1);
+              }
+              return v;
+            }
+
+            function encodePathSegments(path) {
+              return path
+                .split('/')
+                .filter(Boolean)
+                .map(seg => encodeURIComponent(seg))
+                .join('/');
+            }
+
+            function assetPathToRawUrl(anyPath) {
+              const imgPath = (anyPath ?? '').trim();
+              if (!imgPath || imgPath.startsWith('http')) return imgPath;
+              const idx = imgPath.indexOf('assets/');
+              if (idx === -1) return imgPath;
+              const afterAssets = imgPath.slice(idx + 'assets/'.length).trim();
+              const encoded = encodePathSegments(afterAssets);
+              return `${BASE_BLOB_URL}/posts/assets/${encoded}?raw=true`;
+            }
+
+            function fixImageUrlsInMarkdown(content) {
               return content.replace(/!\[(.*?)\]\((.*?)\)/g, (match, alt, imgPath) => {
                 if (imgPath.startsWith('http')) return match;
                 if (imgPath.includes('assets/')) {
-                   const fileName = imgPath.split('assets/')[1];
-                   const cleanFileName = fileName.trim().replace(/ /g, '%20');
-                   const newUrl = `${BASE_BLOB_URL}/posts/assets/${cleanFileName}?raw=true`;
-                   console.log(`   🔗 Fixed Image: ${fileName} -> ${newUrl}`);
-                   return `![${alt}](${newUrl})`;
+                  const newUrl = assetPathToRawUrl(imgPath);
+                  console.log(`   🔗 Fixed Image: ${imgPath} -> ${newUrl}`);
+                  return `![${alt}](${newUrl})`;
                 }
                 return match;
               });
             }
 
+            function splitFrontmatter(content) {
+              const match = content.match(/^---\r?\n([\s\S]+?)\r?\n---\r?\n([\s\S]*)$/);
+              if (!match) return null;
+              return { frontmatterRaw: match[1], body: match[2] };
+            }
+
+            function parseFrontmatter(raw) {
+              const lines = raw.split(/\r?\n/);
+              const out = {};
+              for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                if (!line.trim() || line.trim().startsWith('#')) continue;
+                const m = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
+                if (!m) continue;
+                const key = m[1];
+                const rest = (m[2] ?? '').trim();
+
+                if (rest === '') {
+                  const list = [];
+                  let j = i + 1;
+                  while (j < lines.length) {
+                    const l = lines[j];
+                    if (!l.trim()) { j++; continue; }
+                    if (/^[A-Za-z0-9_]+:/.test(l)) break;
+                    const item = l.match(/^\s*-\s+(.*)$/);
+                    if (!item) break;
+                    list.push(unquote(item[1]));
+                    j++;
+                  }
+                  if (list.length) {
+                    out[key] = list;
+                    i = j - 1;
+                  } else {
+                    out[key] = '';
+                  }
+                  continue;
+                }
+
+                if (rest.startsWith('[') && rest.endsWith(']')) {
+                  const inner = rest.slice(1, -1).trim();
+                  if (!inner) {
+                    out[key] = [];
+                    continue;
+                  }
+                  out[key] = inner
+                    .split(',')
+                    .map(v => unquote(v.trim()))
+                    .filter(Boolean);
+                  continue;
+                }
+
+                out[key] = unquote(rest);
+              }
+              return out;
+            }
+
+            function tagsToHashnodeTags(tagsValue) {
+              if (!tagsValue) return [];
+              if (Array.isArray(tagsValue)) {
+                return tagsValue
+                  .map(t => (t ?? '').toString().trim())
+                  .filter(Boolean)
+                  .map(name => ({ name }));
+              }
+              const asString = (tagsValue ?? '').toString().trim();
+              if (!asString) return [];
+              return asString
+                .split(',')
+                .map(t => t.trim())
+                .filter(Boolean)
+                .map(name => ({ name }));
+            }
+
+            function extractUnknownPublishPostInputFields(errors) {
+              const unknown = [];
+              for (const err of (errors ?? [])) {
+                const msg = (err && err.message) ? String(err.message) : '';
+                const m1 = msg.match(/Field "([A-Za-z0-9_]+)" is not defined by type PublishPostInput/);
+                if (m1) unknown.push(m1[1]);
+                const m2 = msg.match(/Field "([A-Za-z0-9_]+)" is not defined/);
+                if (m2) unknown.push(m2[1]);
+              }
+              return Array.from(new Set(unknown));
+            }
+
+            async function publishPostSmart(baseInput, coverUrl) {
+              const query = `mutation PublishPost($input: PublishPostInput!) { publishPost(input: $input) { post { url } } }`;
+
+              const coverVariants = coverUrl ? [
+                input => ({ ...input, coverImageOptions: { coverImageURL: coverUrl } }),
+                input => ({ ...input, coverImageOptions: { coverImageUrl: coverUrl } }),
+                input => ({ ...input, coverImageURL: coverUrl }),
+                input => ({ ...input, coverImageUrl: coverUrl }),
+                input => ({ ...input, coverImage: coverUrl }),
+              ] : [input => ({ ...input })];
+
+              let lastErrors = null;
+
+              for (const applyCover of coverVariants) {
+                let input = applyCover({ ...baseInput });
+
+                for (let attempt = 0; attempt < 6; attempt++) {
+                  const variables = { input };
+                  const response = await fetch('https://gql.hashnode.com', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': process.env.HASHNODE_PAT,
+                    },
+                    body: JSON.stringify({ query, variables }),
+                  });
+                  const result = await response.json();
+
+                  if (!result.errors) return result;
+                  lastErrors = result.errors;
+
+                  const unknown = extractUnknownPublishPostInputFields(result.errors);
+                  if (!unknown.length) break;
+
+                  for (const field of unknown) {
+                    delete input[field];
+                    if (field === 'coverImageOptions') {
+                      delete input.coverImageURL;
+                      delete input.coverImageUrl;
+                      delete input.coverImage;
+                    }
+                  }
+                }
+              }
+
+              return { errors: lastErrors };
+            }
+
             for (const filePath of files) {
               if (!fs.existsSync(filePath)) continue;
               console.log(`\n🚀 Processing Personal Post: ${filePath}`);
-              
-              let content = fs.readFileSync(filePath, 'utf8');
-              content = fixImageUrls(content);
-              
-              const match = content.match(/^---\n([\s\S]+?)\n---\n([\s\S]*)$/);
-              if (!match) continue;
-              
-              const frontmatterRaw = match[1];
-              const body = match[2];
-              const title = frontmatterRaw.match(/title:\s*(.*)/)?.[1].trim() || 'Untitled';
-              const tagsMatch = frontmatterRaw.match(/tags:\s*\[(.*)\]/);
-              let tags = tagsMatch ? tagsMatch[1].split(',').map(t => ({ name: t.trim().replace(/['"]/g, '') })) : [];
 
-              const query = `mutation PublishPost($input: PublishPostInput!) { publishPost(input: $input) { post { url } } }`;
-              const variables = { input: { title, contentMarkdown: body, publicationId: process.env.PUBLICATION_ID, tags } };
-              
+              const raw = fs.readFileSync(filePath, 'utf8');
+              const parts = splitFrontmatter(raw);
+              if (!parts) {
+                console.log('Skipping: Invalid Frontmatter');
+                continue;
+              }
+
+              const fm = parseFrontmatter(parts.frontmatterRaw);
+              const title = (fm.title ?? 'Untitled').toString().trim() || 'Untitled';
+              const tags = tagsToHashnodeTags(fm.tags);
+
+              let body = fixImageUrlsInMarkdown(parts.body);
+
+              const coverValue = fm.cover ?? fm.coverImage ?? '';
+              const coverUrl = assetPathToRawUrl(coverValue);
+
+              const baseInput = {
+                title,
+                contentMarkdown: body,
+                publicationId: process.env.PUBLICATION_ID,
+                tags,
+              };
+
+              if (fm.slug) baseInput.slug = fm.slug;
+              if (fm.subtitle) baseInput.subtitle = fm.subtitle;
+              if (fm.canonicalUrl) baseInput.canonicalUrl = fm.canonicalUrl;
+
               try {
-                const response = await fetch('https://gql.hashnode.com', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'Authorization': process.env.HASHNODE_PAT },
-                  body: JSON.stringify({ query, variables })
-                });
-                const result = await response.json();
+                const result = await publishPostSmart(baseInput, coverUrl);
                 if (result.errors) {
                   console.error(`❌ Errors:`, JSON.stringify(result.errors));
-                  core.setFailed("Hashnode API Error");
+                  core.setFailed('Hashnode API Error');
                 } else {
                   console.log(`✅ Published: ${result.data.publishPost.post.url}`);
                 }
-              } catch (e) { core.setFailed(e.message); }
+              } catch (e) {
+                core.setFailed(e.message);
+              }
             }

@@ -1,12 +1,13 @@
+---
 title: ""
-slug: ""
+subtitle: ""
 description: ""
-tags: []
+slug: ""
+tags:
+  - ""
 cover: ""
+canonicalUrl: ""
 publishedAt: ""
-cuid: ""
-draft: true
-canonicalURL: ""
 series: ""
-publishAs: ""
-  - motivation
+draft: true
+---
