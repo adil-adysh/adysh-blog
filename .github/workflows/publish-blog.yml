@@ -150,6 +150,43 @@ jobs:
               return out;
             }
 
+            // Try to look up an existing post id by slug so we can update instead of creating.
+            async function findPostIdBySlug(slug, publicationId) {
+              if (!slug) return null;
+              const candidates = [
+                { q: `query($slug:String!,$publicationId:String!){postBySlug(slug:$slug,publicationId:$publicationId){cuid id _id}}`, vars: { slug, publicationId } },
+                { q: `query($slug:String!){post(slug:$slug){cuid id _id}}`, vars: { slug } },
+                { q: `query($slug:String!){getPostBySlug(slug:$slug){cuid id _id}}`, vars: { slug } },
+                { q: `query($slug:String!){article(slug:$slug){cuid id _id}}`, vars: { slug } },
+              ];
+
+              for (const c of candidates) {
+                try {
+                  const resp = await fetch('https://gql.hashnode.com', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': process.env.HASHNODE_PAT },
+                    body: JSON.stringify({ query: c.q, variables: c.vars }),
+                  });
+                  const data = await resp.json();
+                  if (data && data.data) {
+                    const rootKeys = Object.keys(data.data);
+                    for (const k of rootKeys) {
+                      const v = data.data[k];
+                      if (!v) continue;
+                      const post = v.postBySlug || v.post || v.getPostBySlug || v.article || v;
+                      if (post && (post.cuid || post.id || post._id)) {
+                        return post.cuid || post.id || post._id;
+                      }
+                      if (Array.isArray(post) && post.length && (post[0].cuid || post[0].id || post[0]._id)) {
+                        return post[0].cuid || post[0].id || post[0]._id;
+                      }
+                    }
+                  }
+                } catch (e) { /* ignore and try next candidate */ }
+              }
+              return null;
+            }
+
             function tagsToHashnodeTags(tagsValue) {
               if (!tagsValue) return [];
               function slugify(input) {
@@ -242,6 +279,44 @@ jobs:
               return { errors: lastErrors };
             }
 
+            // Try to look up an existing post id by slug so we can update instead of creating.
+            async function findPostIdBySlug(slug, publicationId) {
+              if (!slug) return null;
+              const candidates = [
+                { q: `query($slug:String!,$publicationId:String!){postBySlug(slug:$slug,publicationId:$publicationId){cuid id _id}}`, vars: { slug, publicationId } },
+                { q: `query($slug:String!){post(slug:$slug){cuid id _id}}`, vars: { slug } },
+                { q: `query($slug:String!){getPostBySlug(slug:$slug){cuid id _id}}`, vars: { slug } },
+                { q: `query($slug:String!){article(slug:$slug){cuid id _id}}`, vars: { slug } },
+              ];
+
+              for (const c of candidates) {
+                try {
+                  const resp = await fetch('https://gql.hashnode.com', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': process.env.HASHNODE_PAT },
+                    body: JSON.stringify({ query: c.q, variables: c.vars }),
+                  });
+                  const data = await resp.json();
+                  if (data && data.data) {
+                    const rootKeys = Object.keys(data.data);
+                    for (const k of rootKeys) {
+                      const v = data.data[k];
+                      if (!v) continue;
+                      const post = v.postBySlug || v.post || v.getPostBySlug || v.article || v;
+                      if (post && (post.cuid || post.id || post._id)) {
+                        return post.cuid || post.id || post._id;
+                      }
+                      // If the query returned an object with the slug inside
+                      if (Array.isArray(post) && post.length && (post[0].cuid || post[0].id || post[0]._id)) {
+                        return post[0].cuid || post[0].id || post[0]._1d;
+                      }
+                    }
+                  }
+                } catch (e) { /* ignore and try next candidate */ }
+              }
+              return null;
+            }
+
             for (const filePath of files) {
               if (!fs.existsSync(filePath)) continue;
               console.log(`\n🚀 Processing Tech Post: ${filePath}`);
@@ -276,10 +351,49 @@ jobs:
                 tags,
               };
 
+              // If frontmatter included a cuid (existing post id), include likely id fields
+              // so the API can update the post instead of creating a new one.
+              if (fm.cuid) {
+                baseInput.postId = fm.cuid;
+                baseInput.cuid = fm.cuid;
+                baseInput.id = fm.cuid;
+                console.log(`   📝 Detected cuid in frontmatter; attempting update using id=${fm.cuid}`);
+              }
+
               // Optional fields (will be stripped if not supported by the API)
               if (fm.slug) baseInput.slug = fm.slug;
               if (fm.subtitle) baseInput.subtitle = fm.subtitle;
               if (fm.canonicalUrl) baseInput.canonicalUrl = fm.canonicalUrl;
+
+              // If we have a slug, try a preflight lookup to find an existing post id to update
+              if (fm.slug) {
+                try {
+                  const foundId = await findPostIdBySlug(fm.slug, process.env.PUBLICATION_ID);
+                  if (foundId) {
+                    baseInput.postId = foundId;
+                    baseInput.cuid = foundId;
+                    baseInput.id = foundId;
+                    console.log(`   🔎 Found existing post for slug ${fm.slug}; using id=${foundId} to update`);
+                  } else {
+                    console.log(`   🔎 No existing post found for slug ${fm.slug}`);
+                  }
+                } catch (e) { console.log('   🔎 Slug lookup failed:', e.message || e); }
+              }
+
+              // If we have a slug, try a preflight lookup to find an existing post id to update
+              if (fm.slug) {
+                try {
+                  const foundId = await findPostIdBySlug(fm.slug, process.env.PUBLICATION_ID);
+                  if (foundId) {
+                    baseInput.postId = foundId;
+                    baseInput.cuid = foundId;
+                    baseInput.id = foundId;
+                    console.log(`   🔎 Found existing post for slug ${fm.slug}; using id=${foundId} to update`);
+                  } else {
+                    console.log(`   🔎 No existing post found for slug ${fm.slug}`);
+                  }
+                } catch (e) { console.log('   🔎 Slug lookup failed:', e.message || e); }
+              }
 
               try {
                 const result = await publishPostSmart(baseInput, coverUrl);
@@ -418,6 +532,43 @@ jobs:
               return out;
             }
 
+            // Try to look up an existing post id by slug so we can update instead of creating.
+            async function findPostIdBySlug(slug, publicationId) {
+              if (!slug) return null;
+              const candidates = [
+                { q: `query($slug:String!,$publicationId:String!){postBySlug(slug:$slug,publicationId:$publicationId){cuid id _id}}`, vars: { slug, publicationId } },
+                { q: `query($slug:String!){post(slug:$slug){cuid id _id}}`, vars: { slug } },
+                { q: `query($slug:String!){getPostBySlug(slug:$slug){cuid id _id}}`, vars: { slug } },
+                { q: `query($slug:String!){article(slug:$slug){cuid id _id}}`, vars: { slug } },
+              ];
+
+              for (const c of candidates) {
+                try {
+                  const resp = await fetch('https://gql.hashnode.com', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': process.env.HASHNODE_PAT },
+                    body: JSON.stringify({ query: c.q, variables: c.vars }),
+                  });
+                  const data = await resp.json();
+                  if (data && data.data) {
+                    const rootKeys = Object.keys(data.data);
+                    for (const k of rootKeys) {
+                      const v = data.data[k];
+                      if (!v) continue;
+                      const post = v.postBySlug || v.post || v.getPostBySlug || v.article || v;
+                      if (post && (post.cuid || post.id || post._id)) {
+                        return post.cuid || post.id || post._id;
+                      }
+                      if (Array.isArray(post) && post.length && (post[0].cuid || post[0].id || post[0]._id)) {
+                        return post[0].cuid || post[0].id || post[0]._id;
+                      }
+                    }
+                  }
+                } catch (e) { /* ignore and try next candidate */ }
+              }
+              return null;
+            }
+
             function tagsToHashnodeTags(tagsValue) {
               if (!tagsValue) return [];
               function slugify(input) {
@@ -533,6 +684,13 @@ jobs:
                 publicationId: process.env.PUBLICATION_ID,
                 tags,
               };
+
+              if (fm.cuid) {
+                baseInput.postId = fm.cuid;
+                baseInput.cuid = fm.cuid;
+                baseInput.id = fm.cuid;
+                console.log(`   📝 Detected cuid in frontmatter; attempting update using id=${fm.cuid}`);
+              }
 
               if (fm.slug) baseInput.slug = fm.slug;
               if (fm.subtitle) baseInput.subtitle = fm.subtitle;

@@ -17,6 +17,8 @@ series: "Understanding Yourself Without Losing Yourself"
 
 # **Why “Just Let Go” Never Worked for Me**
 
+![Person holding a rope near a cliff — minimal illustration](../assets/understanding-yourself/act-1/care-rope-cliff-minimal-16x9.png)
+
 We’ve all heard the advice.
 
 It comes from friends who mean well.
