@@ -262,6 +262,12 @@ jobs:
               // Accept either `cover` or `coverImage` in frontmatter.
               const coverValue = fm.cover ?? fm.coverImage ?? '';
               const coverUrl = assetPathToRawUrl(coverValue);
+              if (coverValue) {
+                console.log(`   🖼️ Found cover in frontmatter: ${coverValue}`);
+                console.log(`   🖼️ Resolved cover URL: ${coverUrl}`);
+              } else {
+                console.log('   🖼️ No cover specified in frontmatter');
+              }
 
               const baseInput = {
                 title,
@@ -464,8 +470,10 @@ jobs:
 
               let lastErrors = null;
 
-              for (const applyCover of coverVariants) {
+              for (let vi = 0; vi < coverVariants.length; vi++) {
+                const applyCover = coverVariants[vi];
                 let input = applyCover({ ...baseInput });
+                console.log(`   🔁 Trying cover variant #${vi + 1} with fields: ${Object.keys(input).join(', ')}`);
 
                 for (let attempt = 0; attempt < 6; attempt++) {
                   const variables = { input };
