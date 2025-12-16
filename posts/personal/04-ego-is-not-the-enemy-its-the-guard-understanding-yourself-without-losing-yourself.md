@@ -303,23 +303,3 @@ For now, it’s enough to remember this:
 > It’s a guard who learned its job on a hard night.**
 
 We can take this slowly.
-
----
-
-### Recall test (editor’s check)
-
-If a reader remembers only three things weeks later, it will be:
-
-* **“The ego is a guard, not an enemy.”**
-* **“It learned its job on a hard night.”**
-* **“You loosen the grip — you don’t fire the guard.”**
-
-That’s exactly what we want.
-
-If you’re ready, we can now:
-
-* lock Post #4
-* move to **Post #5: The Beliefs We Absorb Without Choosing**
-* or do a full **series recall audit** (very powerful at this stage)
-
-Tell me what’s next.
