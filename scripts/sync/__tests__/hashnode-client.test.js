@@ -41,7 +41,7 @@ describe('hashnode-client', () => {
 
     expect(url).toBe('https://gql.hashnode.com');
     expect(options.method).toBe('POST');
-    expect(options.headers['Authorization']).toBe(TOKEN);
+    expect(options.headers['Authorization']).toBe(`Bearer ${TOKEN}`);
 
     const body = JSON.parse(options.body);
     expect(body.query).toBe(query);

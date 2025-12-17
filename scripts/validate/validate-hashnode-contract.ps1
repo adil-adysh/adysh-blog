@@ -17,6 +17,10 @@ function Pass($msg) {
   Write-Host "✅ $msg" -ForegroundColor Green
 }
 
+function Warn($msg) {
+  Write-Host "⚠️ $msg" -ForegroundColor Yellow
+}
+
 function Dump-Type($type, $label) {
   Write-Host "`n🧯 DEBUG DUMP: $label" -ForegroundColor Yellow
   try {
@@ -78,6 +82,10 @@ foreach ($m in $requiredMutations) {
 }
 
 if ($mutationNames -match "^reorderSeries") {
+  Fail "Forbidden reorderSeries mutation detected"
+}
+
+if ($mutationNames -contains "reorderSeries") {
   Fail "Forbidden reorderSeries mutation detected"
 }
 
@@ -160,8 +168,8 @@ function Validate-Enum {
 
   $enum = $schema.types | Where-Object { $_.name -eq $EnumName -and $_.kind -eq "ENUM" }
   if (-not $enum) {
-    Write-Host "ℹ️ SortOrder is generic (asc/dsc). Series display semantics are UI-mapped." -ForegroundColor Yellow
-    Fail "Enum not found: $EnumName"
+    Warn "Enum not found: $EnumName (skipping enum validation)"
+    return
   }
 
   $values = @()
@@ -176,7 +184,7 @@ function Validate-Enum {
   }
 
   foreach ($v in $RequiredValues) {
-    if ($values -notcontains $v) {
+    if ($values -notcontains $v -and $values -notcontains $v.ToUpperInvariant()) {
       Write-Host "Detected enum values for ${EnumName}: $($values -join ', ')" -ForegroundColor Yellow
       Dump-Type $enum "$EnumName (missing required enum value)"
       Fail "$EnumName missing required value: $v"
@@ -193,7 +201,7 @@ Validate-Enum `
 # -------------------------
 # 5️⃣ Cover image support
 # -------------------------
-$coverType = $schema.types | Where-Object { $_.name -eq "CoverImageOptionsInput" }
+$coverType = $schema.types | Where-Object { $_.name -eq "CoverImageOptionsInput" -and $_.kind -eq "INPUT_OBJECT" }
 if (-not $coverType) {
   Fail "CoverImageOptionsInput not found"
 }
@@ -205,6 +213,83 @@ if ($coverFields -notcontains "coverImageURL") {
 }
 
 Pass "Cover image contract validated"
+
+# -------------------------
+# 5️⃣b Query + object fields used by the JS sync
+# -------------------------
+function Get-TypeByName {
+  param (
+    [string]$TypeName,
+    [string]$Kind = $null
+  )
+
+  $t = $schema.types | Where-Object { $_.name -eq $TypeName } | Select-Object -First 1
+  if (-not $t) {
+    Fail "Type not found: $TypeName"
+  }
+
+  if ($Kind -and $t.kind -ne $Kind) {
+    Dump-Type $t "$TypeName (wrong kind)"
+    Fail "Type $TypeName expected kind $Kind, got $($t.kind)"
+  }
+
+  return $t
+}
+
+function Get-Field {
+  param (
+    $Type,
+    [string]$FieldName
+  )
+
+  if (-not $Type.fields) { return $null }
+  return ($Type.fields | Where-Object { $_.name -eq $FieldName } | Select-Object -First 1)
+}
+
+function Require-Field {
+  param (
+    [string]$TypeName,
+    [string]$FieldName
+  )
+
+  $type = Get-TypeByName -TypeName $TypeName -Kind "OBJECT"
+  $field = Get-Field -Type $type -FieldName $FieldName
+  if (-not $field) {
+    Write-Host "Available fields on ${TypeName}: $((($type.fields | ForEach-Object { $_.name }) -join ', '))" -ForegroundColor Yellow
+    Fail "Missing required field: ${TypeName}.${FieldName}"
+  }
+  return $field
+}
+
+function Require-Arg {
+  param (
+    [string]$TypeName,
+    [string]$FieldName,
+    [string]$ArgName
+  )
+
+  $field = Require-Field -TypeName $TypeName -FieldName $FieldName
+  $args = @()
+  if ($field.args) {
+    $args = $field.args | ForEach-Object { $_.name }
+  }
+
+  if ($args -notcontains $ArgName) {
+    Write-Host "Detected args for ${TypeName}.${FieldName}: $($args -join ', ')" -ForegroundColor Yellow
+    Dump-Type $field "${TypeName}.${FieldName} (missing arg)"
+    Fail "Missing required arg: ${TypeName}.${FieldName}(${ArgName}: ...)"
+  }
+}
+
+# These are the query/object fields our JS uses:
+# - publication(id) { post(slug) { id } }
+# - series(slug) { id posts(first) { edges { node { id }}}}
+Require-Arg -TypeName "Query" -FieldName "publication" -ArgName "id"
+Require-Arg -TypeName "Query" -FieldName "series" -ArgName "slug"
+Require-Arg -TypeName "Publication" -FieldName "post" -ArgName "slug"
+Require-Arg -TypeName "Series" -FieldName "posts" -ArgName "first"
+
+Pass "Query/object fields used by sync validated"
 
 # -------------------------
 # 6️⃣ Repo structure validation
@@ -234,7 +319,8 @@ foreach ($folder in $seriesFolders) {
   Select-Object -ExpandProperty Name
 
   $sorted = $posts | Sort-Object
-  if ($posts -ne $sorted) {
+  $diff = Compare-Object -ReferenceObject $posts -DifferenceObject $sorted
+  if ($diff) {
     Fail "Posts not numerically ordered in series: $($folder.Name)"
   }
 

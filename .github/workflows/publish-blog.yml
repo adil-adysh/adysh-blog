@@ -29,6 +29,83 @@ jobs:
           node-version: 20
 
       # ---------------------------------------------------------
+      # STEP 0: Fetch latest Hashnode schema (required by validator)
+      # ---------------------------------------------------------
+      - name: Fetch latest Hashnode GraphQL schema
+        shell: pwsh
+        env:
+          HASHNODE_KEY: ${{ secrets.HASHNODE_KEY }}
+        run: |
+          if (-not $env:HASHNODE_KEY) {
+            Write-Error "HASHNODE_KEY secret is missing"
+            exit 1
+          }
+
+          New-Item -ItemType Directory -Force schema | Out-Null
+
+          $headers = @{
+            Authorization = "Bearer $env:HASHNODE_KEY"
+            "Content-Type" = "application/json"
+          }
+
+          $query = @"
+          query IntrospectionQuery {
+            __schema {
+              types {
+                kind
+                name
+                description
+                fields {
+                  name
+                  description
+                  args {
+                    name
+                    description
+                    type {
+                      kind
+                      name
+                      ofType {
+                        kind
+                        name
+                        ofType { kind name }
+                      }
+                    }
+                  }
+                }
+                inputFields {
+                  name
+                  description
+                  type {
+                    kind
+                    name
+                    ofType { kind name ofType { kind name } }
+                  }
+                }
+                enumValues { name }
+              }
+            }
+          }
+          "@
+
+          $body = @{ query = $query } | ConvertTo-Json -Depth 10
+
+          $response = Invoke-RestMethod `
+            -Uri "https://gql.hashnode.com" `
+            -Method POST `
+            -Headers $headers `
+            -Body $body `
+            -TimeoutSec 30
+
+          if (-not $response.data.__schema) {
+            Write-Error "Invalid introspection response: __schema missing"
+            exit 1
+          }
+
+          $response.data |
+            ConvertTo-Json -Depth 25 |
+            Out-File schema/hashnode-schema.json -Encoding utf8
+
+      # ---------------------------------------------------------
       # STEP 1: Validate Hashnode API contract (optional but recommended)
       # ---------------------------------------------------------
       - name: Validate Hashnode GraphQL contract

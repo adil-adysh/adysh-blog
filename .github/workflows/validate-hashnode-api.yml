@@ -54,6 +54,8 @@ jobs:
         id: fetch-schema
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force schema | Out-Null
+
           $headers = @{
             Authorization = "Bearer $env:HASHNODE_KEY"
             "Content-Type" = "application/json"
