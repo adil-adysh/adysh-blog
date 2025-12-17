@@ -9,7 +9,7 @@ tags:
   - emotional-awareness
   - mental-health
   - introspection
-cover: "../assets/understanding-yourself/act-1/crossroads of choices.png"
+cover: "../../assets/understanding-yourself/act-1/crossroads of choices.png"
 canonicalUrl: ""
 publishedAt: ""
 series: "Understanding Yourself Without Losing Yourself"
@@ -17,7 +17,7 @@ series: "Understanding Yourself Without Losing Yourself"
 
 ## **2. The Roots of Emotion: Wanting and Fearing**
 
-![A forked path at a crossroads, representing choices](../assets/understanding-yourself/act-1/crossroads of choices.png)
+![A forked path at a crossroads, representing choices](../../assets/understanding-yourself/act-1/crossroads of choices.png)
 
 Sometimes emotions don’t hurt because they’re intense.
 They hurt because you can’t quite tell what’s happening.

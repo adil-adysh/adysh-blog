@@ -8,7 +8,7 @@ tags:
   - identity
   - emotional-awareness
   - introspection
-cover: "../assets/understanding-yourself/act-1/Golden afternoon in a forest path.png"
+cover: "../../assets/understanding-yourself/act-1/Golden afternoon in a forest path.png"
 canonicalUrl: ""
 publishedAt: ""
 series: "Understanding Yourself Without Losing Yourself"
@@ -16,7 +16,7 @@ series: "Understanding Yourself Without Losing Yourself"
 
 ## **3. How Emotions Quietly Build Your Identity**
 
-![Sunlit forest dirt path with faint tracks and soft grass](../assets/understanding-yourself/act-1/Golden afternoon in a forest path.png)
+![Sunlit forest dirt path with faint tracks and soft grass](../../assets/understanding-yourself/act-1/Golden afternoon in a forest path.png)
 
 At first, it doesn’t feel important.
 

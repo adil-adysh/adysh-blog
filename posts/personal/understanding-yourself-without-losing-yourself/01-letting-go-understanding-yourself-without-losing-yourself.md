@@ -9,7 +9,7 @@ tags:
   - personal-growth
   - mental-health
   - introspection
-cover: "../assets/understanding-yourself/act-1/care-rope-cliff-minimal-16x9.png"
+cover: "../../assets/understanding-yourself/act-1/care-rope-cliff-minimal-16x9.png"
 canonicalUrl: ""
 publishedAt: ""
 series: "Understanding Yourself Without Losing Yourself"
@@ -17,7 +17,7 @@ series: "Understanding Yourself Without Losing Yourself"
 
 # **Why “Just Let Go” Never Worked for Me**
 
-![Person holding a rope near a cliff — minimal illustration](../assets/understanding-yourself/act-1/care-rope-cliff-minimal-16x9.png)
+![Person holding a rope near a cliff — minimal illustration](../../assets/understanding-yourself/act-1/care-rope-cliff-minimal-16x9.png)
 
 We’ve all heard the advice.
 

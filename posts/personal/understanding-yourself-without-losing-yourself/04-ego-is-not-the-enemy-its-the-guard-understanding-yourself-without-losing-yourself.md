@@ -8,7 +8,7 @@ tags:
   - ego
   - emotional-awareness
   - introspection
-cover: "../assets/understanding-yourself/act-1/Nightwatch by the foggy path.png"
+cover: "../../assets/understanding-yourself/act-1/Nightwatch by the foggy path.png"
 canonicalUrl: ""
 publishedAt: ""
 series: "Understanding Yourself Without Losing Yourself"
@@ -16,7 +16,7 @@ series: "Understanding Yourself Without Losing Yourself"
 
 ## **4. Ego Is Not the Enemy (It’s the Guard)**
 
-![A night watchman standing under a stone archway, holding a flashlight and looking down a quiet forest path at night, with a lantern glowing nearby](../assets/understanding-yourself/act-1/Nightwatch by the foggy path.png)
+![A night watchman standing under a stone archway, holding a flashlight and looking down a quiet forest path at night, with a lantern glowing nearby](../../assets/understanding-yourself/act-1/Nightwatch by the foggy path.png)
 
 By now, you may have noticed something.
 
