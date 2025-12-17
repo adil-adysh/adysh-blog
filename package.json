@@ -1,8 +1,18 @@
 {
-  "name": "adysh-blog-sync",
+  "name": "hashnode-sync",
   "version": "0.0.0",
   "private": true,
+  "bin": {
+    "hashnode-sync": "scripts/sync/cli.js"
+  },
+  "scripts": {
+    "test": "jest"
+  },
   "dependencies": {
-    "node-fetch": "^2.6.7"
+    "node-fetch": "^2.6.7",
+    "yaml": "^2.3.1"
+  },
+  "devDependencies": {
+    "jest": "^29.6.1"
   }
 }
