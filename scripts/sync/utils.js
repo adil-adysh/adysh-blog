@@ -167,12 +167,19 @@ function assetPathToRawUrl(assetPath, env = process.env, dryRun = false) {
 
   if (!repo || !sha) {
     if (dryRun) {
-      return `https://raw.githubusercontent.com/[REPO]/[SHA]/${assetPath}`;
+      const normalized = toPosixPath(assetPath).replace(/^\/+/, '');
+      const safe = encodeGitHubRawUrl(`https://raw.githubusercontent.com/[REPO]/[SHA]/${normalized}`);
+      return safe;
     }
     throw new Error('GITHUB_REPOSITORY and GITHUB_SHA are required');
   }
 
-  return `https://raw.githubusercontent.com/${repo}/${sha}/${assetPath}`;
+  // normalize path segments (collapse .. / .) using posix normalize
+  const posix = toPosixPath(assetPath);
+  const normalized = path.posix.normalize('/' + posix).replace(/^\/+/, '');
+
+  const url = `https://raw.githubusercontent.com/${repo}/${sha}/${normalized}`;
+  return encodeGitHubRawUrl(url);
 }
 
 /**

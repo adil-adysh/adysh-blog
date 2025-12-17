@@ -81,6 +81,7 @@ async function syncPost() {
     body,
     env = process.env,
     dryRun = false,
+    sourcePath,
   } = params;
 
   const baseInput = {
@@ -89,7 +90,7 @@ async function syncPost() {
     contentMarkdown: body,
     slug: frontmatter.slug,
     tags: normalizeTags(frontmatter.tags),
-    coverImageOptions: resolveCoverImage(frontmatter, env, dryRun),
+    coverImageOptions: resolveCoverImage(frontmatter, env, dryRun, sourcePath),
   };
 
   // Try update by cuid if present (most reliable)

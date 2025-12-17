@@ -172,6 +172,7 @@ async function syncSeriesFolder({
       publicationId,
       env,
       dryRun,
+      sourcePath: path.join(folderPath, file),
     });
 
     // Only add post if it's not already in the series

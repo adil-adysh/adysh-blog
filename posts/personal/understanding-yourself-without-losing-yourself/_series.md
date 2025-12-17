@@ -7,4 +7,3 @@ descriptionMarkdown: |
   who they already are — and how many traits began as strategies, not destinies.
 sortOrder: asc
 ---
-  

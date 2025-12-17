@@ -57,7 +57,8 @@ async function syncRoot({ rootPath, publicationId, client, env, dryRun = false }
         client,
         frontmatter,
         body,
-        publicationId,
+          publicationId,
+          sourcePath: fullPath,
         env,
         dryRun,
       });
