@@ -110,16 +110,26 @@ if ($isJson) {
     }
     Fail "CreateSeriesInput type not found in schema"
   }
+  # Some introspection outputs put input fields under 'inputFields', others under 'fields'.
   $inputFieldNames = @()
-  if ($inputType.inputFields) { $inputFieldNames = $inputType.inputFields | ForEach-Object { $_.name } }
+  $inputFieldObjs = $null
+  if ($inputType.PSObject.Properties.Name -contains 'inputFields') { $inputFieldObjs = $inputType.inputFields }
+  if (-not $inputFieldObjs -and $inputType.PSObject.Properties.Name -contains 'fields') { $inputFieldObjs = $inputType.fields }
+
+  if ($inputFieldObjs) {
+    # Each field object typically has a 'name' property
+    $inputFieldNames = $inputFieldObjs | ForEach-Object { $_.name } | Where-Object { $_ }
+  }
+
   if (-not $inputFieldNames -or $inputFieldNames.Count -eq 0) {
-    Write-Host "CreateSeriesInput exists but contains no inputFields. Dumping the type object for diagnosis:" -ForegroundColor Yellow
+    Write-Host "CreateSeriesInput exists but contains no discoverable input fields. Dumping the type object for diagnosis:" -ForegroundColor Yellow
     try {
       $jsonDump = $inputType | ConvertTo-Json -Depth 8
       Write-Host $jsonDump
     } catch {
       Write-Host "(failed to convert type object to JSON)" -ForegroundColor Yellow
     }
+    Write-Host "Type object properties: $($inputType.PSObject.Properties.Name -join ', ')" -ForegroundColor Yellow
     Fail "CreateSeriesInput missing fields (no inputFields present)"
   }
   foreach ($field in $expectedSeriesFields) {

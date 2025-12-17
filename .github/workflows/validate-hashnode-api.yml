@@ -49,24 +49,32 @@ jobs:
               types {
                 kind
                 name
+                description
+                # For object types
                 fields {
                   name
+                  description
                   args {
                     name
+                    description
                     type {
                       kind
                       name
                       ofType {
                         kind
                         name
-                        ofType {
-                          kind
-                          name
-                        }
+                        ofType { kind name }
                       }
                     }
                   }
                 }
+                # For input object types
+                inputFields {
+                  name
+                  description
+                  type { kind name ofType { kind name ofType { kind name } } }
+                }
+                enumValues { name }
               }
             }
           }
