@@ -1,5 +1,5 @@
 param (
-  [string]$SchemaPath = "hashnode-schema.graphql",
+  [string]$SchemaPath = "schema/hashnode-schema.json",
   [string]$PostsPath = "posts"
 )
 

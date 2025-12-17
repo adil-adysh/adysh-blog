@@ -8,7 +8,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "validate-hashnode-series.ps1"
+      - "scripts/validate/**"
       - ".github/workflows/validate-hashnode-api.yml"
 
 permissions:
@@ -120,7 +120,7 @@ jobs:
 
           $response.data |
             ConvertTo-Json -Depth 25 |
-            Out-File hashnode-schema.graphql -Encoding utf8
+            Out-File schema/hashnode-schema.json -Encoding utf8
 
           Write-Host "✅ Latest Hashnode schema fetched"
 
@@ -130,8 +130,8 @@ jobs:
       - name: Validate Hashnode API contract
         shell: pwsh
         run: |
-          pwsh ./validate-hashnode-series.ps1 `
-            -SchemaPath hashnode-schema.graphql `
+          pwsh ./scripts/validate/validate-hashnode-contract.ps1 `
+            -SchemaPath schema/hashnode-schema.json `
             -PostsPath posts
 
       # ----------------------------------
@@ -142,7 +142,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: hashnode-schema-on-failure
-          path: hashnode-schema.graphql
+          path: schema/hashnode-schema.json
           retention-days: 7
 
       # ----------------------------------
