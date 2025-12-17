@@ -1,0 +1,100 @@
+name: Validate Hashnode GraphQL Contract
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Daily check — catches silent API changes
+    - cron: "0 2 * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - "validate-hashnode-series.ps1"
+      - ".github/workflows/validate-hashnode-api.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up PowerShell
+        uses: PowerShell/PowerShell@v1
+
+      - name: Verify Hashnode API key exists
+        shell: pwsh
+        run: |
+          if (-not $env:HASHNODE_KEY) {
+            Write-Error "HASHNODE_KEY secret is missing"
+          }
+          Write-Host "✅ HASHNODE_KEY found"
+
+      # -------------------------------
+      # Always fetch latest schema
+      # -------------------------------
+      - name: Fetch latest Hashnode GraphQL schema
+        shell: pwsh
+        run: |
+          $headers = @{
+            "Authorization" = "Bearer $env:HASHNODE_KEY"
+            "Content-Type"  = "application/json"
+          }
+
+          $query = @"
+          query IntrospectionQuery {
+            __schema {
+              types {
+                kind
+                name
+                fields {
+                  name
+                  args {
+                    name
+                    type {
+                      kind
+                      name
+                      ofType {
+                        kind
+                        name
+                        ofType {
+                          kind
+                          name
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          "@
+
+          $body = @{ query = $query } | ConvertTo-Json -Depth 10
+
+          $response = Invoke-RestMethod `
+            -Uri https://gql.hashnode.com `
+            -Method POST `
+            -Headers $headers `
+            -Body $body
+
+          # Overwrite schema every run (never trust committed copy)
+          $response.data | ConvertTo-Json -Depth 25 `
+            | Out-File hashnode-schema.graphql -Encoding utf8
+
+          Write-Host "✅ Latest Hashnode schema fetched"
+
+      # -------------------------------
+      # Validate assumptions
+      # -------------------------------
+      - name: Validate Hashnode API contract
+        shell: pwsh
+        run: |
+          pwsh ./validate-hashnode-series.ps1 `
+            -SchemaPath hashnode-schema.graphql `
+            -PostsPath posts
+
+      - name: Validation success
+        if: success()
+        run: echo "🎉 Hashnode API contract validated successfully"
