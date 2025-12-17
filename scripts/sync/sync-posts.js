@@ -92,7 +92,7 @@ async function syncPost() {
     coverImageOptions: resolveCoverImage(frontmatter, env, dryRun),
   };
 
-  // Try update by cuid if present
+  // Try update by cuid if present (most reliable)
   if (frontmatter.cuid) {
     try {
       console.log(`✏️ Updating post: ${frontmatter.slug || frontmatter.cuid}`);
@@ -106,32 +106,36 @@ async function syncPost() {
       const id = await updatePost(client, updateInput);
       if (id) return { action: 'update', id };
     } catch (e) {
-      // fall through to publish
+      console.log(`   ↳ CUID update failed: ${e.message}, trying slug lookup...`);
+      // fall through to slug lookup
     }
   }
 
-  // Try find by slug
+  // Try find by slug (always check, except in pure dry-run mode)
   if (frontmatter.slug && !dryRun) {
-    const existingId = await findPostIdBySlug(client, publicationId, frontmatter.slug);
-    if (existingId) {
-        console.log(`✏️ Updating post: ${frontmatter.slug}`);
-
-        if (dryRun) {
-          console.log('   ↳ DRY-RUN: updatePost', { id: existingId, slug: frontmatter.slug });
-          return { action: 'update', id: existingId, dryRun: true };
-        }
-
+    console.log(`   ↳ Looking up existing post by slug: ${frontmatter.slug}`);
+    try {
+      const existingId = await findPostIdBySlug(client, publicationId, frontmatter.slug);
+      if (existingId) {
+        console.log(`✏️ Updating post: ${frontmatter.slug} (found by slug)`);
         const updateInput = Object.assign({ id: existingId }, baseInput);
-        try {
-          const id = await updatePost(client, updateInput);
-          if (id) return { action: 'update', id };
-        } catch (e) {
-          // fall through to publish
-        }
+        const id = await updatePost(client, updateInput);
+        if (id) return { action: 'update', id };
+      }
+    } catch (e) {
+      console.log(`   ↳ Slug lookup failed: ${e.message}, proceeding cautiously...`);
+      // If slug lookup fails, we should NOT fall back to publish without warning
+      // Log it clearly so user can investigate
     }
   }
 
-  // Publish
+  // Publish (final fallback)
+  // If we reach here, post was not found or updated
+  if (!dryRun && !frontmatter.cuid && frontmatter.slug) {
+    console.log(`   ⚠️ No cuid in frontmatter and no existing post found by slug. Publishing as NEW post.`);
+    console.log(`   💡 TIP: After first publish, add the returned cuid to frontmatter to enable future updates.`);
+  }
+
   console.log(`🆕 Creating post: ${frontmatter.slug}`);
 
   if (dryRun) {
