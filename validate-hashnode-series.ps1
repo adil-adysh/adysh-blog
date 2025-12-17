@@ -112,6 +112,16 @@ if ($isJson) {
   }
   $inputFieldNames = @()
   if ($inputType.inputFields) { $inputFieldNames = $inputType.inputFields | ForEach-Object { $_.name } }
+  if (-not $inputFieldNames -or $inputFieldNames.Count -eq 0) {
+    Write-Host "CreateSeriesInput exists but contains no inputFields. Dumping the type object for diagnosis:" -ForegroundColor Yellow
+    try {
+      $jsonDump = $inputType | ConvertTo-Json -Depth 8
+      Write-Host $jsonDump
+    } catch {
+      Write-Host "(failed to convert type object to JSON)" -ForegroundColor Yellow
+    }
+    Fail "CreateSeriesInput missing fields (no inputFields present)"
+  }
   foreach ($field in $expectedSeriesFields) {
     $f = $field.TrimEnd(':')
     if ($inputFieldNames -notcontains $f) {
