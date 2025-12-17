@@ -1,5 +1,5 @@
 param (
-  [string]$SchemaPath = "schema/hashnode-schema.json",
+  [string]$SchemaPath = "schema/hashnode-schema.graphql",
   [string]$PostsPath = "posts"
 )
 
@@ -36,7 +36,14 @@ function Dump-Type($type, $label) {
 # 1️⃣ Load & parse schema
 # -------------------------
 if (-not (Test-Path $SchemaPath)) {
-  Fail "Schema file not found: $SchemaPath"
+  $fallback = "schema/hashnode-schema.json"
+  if (Test-Path $fallback) {
+    Warn "Schema file not found: $SchemaPath; falling back to $fallback"
+    $SchemaPath = $fallback
+  }
+  else {
+    Fail "Schema file not found: $SchemaPath"
+  }
 }
 
 $raw = Get-Content $SchemaPath -Raw
@@ -283,10 +290,10 @@ function Require-Arg {
 
 # These are the query/object fields our JS uses:
 # - publication(id) { post(slug) { id } }
-# - series(slug) { id posts(first) { edges { node { id }}}}
+# - publication(id) { series(slug) { id posts(first) { edges { node { id }}}}}
 Require-Arg -TypeName "Query" -FieldName "publication" -ArgName "id"
-Require-Arg -TypeName "Query" -FieldName "series" -ArgName "slug"
 Require-Arg -TypeName "Publication" -FieldName "post" -ArgName "slug"
+Require-Arg -TypeName "Publication" -FieldName "series" -ArgName "slug"
 Require-Arg -TypeName "Series" -FieldName "posts" -ArgName "first"
 
 Pass "Query/object fields used by sync validated"

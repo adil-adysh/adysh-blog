@@ -124,6 +124,10 @@ jobs:
             ConvertTo-Json -Depth 25 |
             Out-File schema/hashnode-schema.json -Encoding utf8
 
+          $response.data |
+            ConvertTo-Json -Depth 25 |
+            Out-File schema/hashnode-schema.graphql -Encoding utf8
+
           Write-Host "✅ Latest Hashnode schema fetched"
 
       # ----------------------------------
@@ -133,7 +137,7 @@ jobs:
         shell: pwsh
         run: |
           pwsh ./scripts/validate/validate-hashnode-contract.ps1 `
-            -SchemaPath schema/hashnode-schema.json `
+            -SchemaPath schema/hashnode-schema.graphql `
             -PostsPath posts
 
       # ----------------------------------
@@ -144,7 +148,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: hashnode-schema-on-failure
-          path: schema/hashnode-schema.json
+          path: |
+            schema/hashnode-schema.graphql
+            schema/hashnode-schema.json
           retention-days: 7
 
       # ----------------------------------

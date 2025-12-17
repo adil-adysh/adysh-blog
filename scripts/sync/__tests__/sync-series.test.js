@@ -30,8 +30,8 @@ describe('sync-series', () => {
 
     client = {
       gql: jest.fn(async (query, variables) => {
-        if (query.includes('series(slug')) {
-          return { series: null };
+        if (query.includes('publication(id') && query.includes('series(slug')) {
+          return { publication: { series: null } };
         }
 
         if (query.includes('createSeries')) {

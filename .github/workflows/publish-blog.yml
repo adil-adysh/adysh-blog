@@ -105,6 +105,10 @@ jobs:
             ConvertTo-Json -Depth 25 |
             Out-File schema/hashnode-schema.json -Encoding utf8
 
+          $response.data |
+            ConvertTo-Json -Depth 25 |
+            Out-File schema/hashnode-schema.graphql -Encoding utf8
+
       # ---------------------------------------------------------
       # STEP 1: Validate Hashnode API contract (optional but recommended)
       # ---------------------------------------------------------
@@ -112,7 +116,7 @@ jobs:
         shell: pwsh
         run: |
           ./scripts/validate/validate-hashnode-contract.ps1 `
-            -SchemaPath schema/hashnode-schema.json `
+            -SchemaPath schema/hashnode-schema.graphql `
             -PostsPath posts
 
       # ---------------------------------------------------------

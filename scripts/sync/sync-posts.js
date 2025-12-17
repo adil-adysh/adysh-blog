@@ -12,7 +12,7 @@ const {
 
 // Use a publication-scoped lookup to avoid deprecated/invalid fields
 const FIND_POST_BY_SLUG = `
-  query FindPostBySlug($publicationId: ID!, $slug: String!) {
+  query FindPostBySlug($publicationId: ObjectId!, $slug: String!) {
     publication(id: $publicationId) {
       post(slug: $slug) { id }
     }

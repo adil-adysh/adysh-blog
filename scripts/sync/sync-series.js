@@ -20,13 +20,15 @@ async function ensureSeries(client, seriesFrontmatter, publicationId, env = proc
   validateFrontmatter(seriesFrontmatter, ['name', 'slug']);
 
   const query = `
-    query ($slug: String!) {
-      series(slug: $slug) {
-        id
-        posts(first: 50) {
-          edges {
-            node {
-              id
+    query ($publicationId: ObjectId!, $slug: String!) {
+      publication(id: $publicationId) {
+        series(slug: $slug) {
+          id
+          posts(first: 50) {
+            edges {
+              node {
+                id
+              }
             }
           }
         }
@@ -39,10 +41,10 @@ async function ensureSeries(client, seriesFrontmatter, publicationId, env = proc
   
   if (!dryRun) {
     try {
-      const data = await client.gql(query, { slug: seriesFrontmatter.slug });
-      existingId = data?.series?.id ?? null;
-      if (data?.series?.posts?.edges) {
-        existingPostIds = data.series.posts.edges.map(edge => edge.node.id);
+      const data = await client.gql(query, { publicationId, slug: seriesFrontmatter.slug });
+      existingId = data?.publication?.series?.id ?? null;
+      if (data?.publication?.series?.posts?.edges) {
+        existingPostIds = data.publication.series.posts.edges.map(edge => edge.node.id);
       }
     } catch {
       existingId = null;
