@@ -130,6 +130,44 @@ First body`
     expect(addCalls.length).toBe(2);
   });
 
+  test('dry-run prevents series mutations and addPostToSeries', async () => {
+    // Create _series.md
+    fs.writeFileSync(
+      path.join(tempDir, '_series.md'),
+      `---
+name: Ordered Series
+slug: dry-run-series
+---`
+    );
+
+    // Create a single post
+    fs.writeFileSync(
+      path.join(tempDir, '01-first.md'),
+      `---
+title: First
+slug: first
+---
+First body`
+    );
+
+    const syncPostMock = jest.fn(async ({ frontmatter }) => ({ id: `post-${frontmatter.slug}` }));
+
+    const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    await syncSeriesFolder({ client, folderPath: tempDir, publicationId, syncPost: syncPostMock, env, dryRun: true });
+
+    // There should be no addPostToSeries calls (mutations)
+    const addCalls = client.gql.mock.calls.filter(call => call[0].includes('addPostToSeries'));
+    expect(addCalls.length).toBe(0);
+
+    // ensureSeries should have been called for lookup only
+    // initial lookup is one call
+    expect(client.gql.mock.calls.length).toBeGreaterThanOrEqual(1);
+    expect(log).toHaveBeenCalled();
+
+    log.mockRestore();
+  });
+
   test('throws if _series.md is missing', async () => {
     await expect(
       syncSeriesFolder({

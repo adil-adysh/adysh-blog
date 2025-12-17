@@ -93,4 +93,49 @@ describe('sync-posts', () => {
 
     expect(client.gql).toHaveBeenCalledTimes(3);
   });
+
+  test('dry-run skips publish and logs intent', async () => {
+    const client = { gql: jest.fn() };
+
+    // find by slug -> returns null
+    client.gql.mockResolvedValueOnce({});
+
+    const frontmatter = { title: 'T', slug: 's', tags: ['a'] };
+    const body = 'body';
+
+    const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    const res = await syncPost(client, { publicationId, frontmatter, body, env, dryRun: true });
+
+    expect(res.action).toBe('publish');
+    expect(res.dryRun).toBe(true);
+    expect(res.id).toBe('dry-run');
+
+    // Only slug lookup was performed
+    expect(client.gql).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalled();
+
+    log.mockRestore();
+  });
+
+  test('dry-run skips update by cuid and logs intent', async () => {
+    const client = { gql: jest.fn() };
+
+    const frontmatter = { title: 'T', slug: 's', tags: ['a'], cuid: 'c-1' };
+    const body = 'body';
+
+    const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    const res = await syncPost(client, { publicationId, frontmatter, body, env, dryRun: true });
+
+    expect(res.action).toBe('update');
+    expect(res.dryRun).toBe(true);
+    expect(res.id).toBe('c-1');
+
+    // No GraphQL calls should be made for update-by-id in dry-run
+    expect(client.gql).toHaveBeenCalledTimes(0);
+    expect(log).toHaveBeenCalled();
+
+    log.mockRestore();
+  });
 });

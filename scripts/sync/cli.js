@@ -17,6 +17,7 @@ Usage:
 Options:
   --tech         Sync tech posts only
   --personal     Sync personal posts only
+  --dry-run      Show what would change (no API writes)
   --all          Sync both (default)
   -h, --help     Show this help
 `);
@@ -33,6 +34,7 @@ async function main() {
   const options = {
     tech: args.includes('--personal') ? false : true,
     personal: args.includes('--tech') ? false : true,
+    dryRun: args.includes('--dry-run'),
   };
 
   await runSync(options);

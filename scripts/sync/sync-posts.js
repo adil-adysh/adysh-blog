@@ -48,7 +48,7 @@ async function publishPost(client, input) {
  *  - Else, try find by slug -> update
  *  - Fallback to publish
  */
-async function syncPost(client, { publicationId, frontmatter, body, env = process.env }) {
+async function syncPost(client, { publicationId, frontmatter, body, env = process.env, dryRun = false }) {
   const baseInput = {
     publicationId,
     title: frontmatter.title,
@@ -61,6 +61,13 @@ async function syncPost(client, { publicationId, frontmatter, body, env = proces
   // Try update by cuid if present
   if (frontmatter.cuid) {
     try {
+      console.log(`✏️ Updating post: ${frontmatter.slug || frontmatter.cuid}`);
+
+      if (dryRun) {
+        console.log('   ↳ DRY-RUN: updatePost', { id: frontmatter.cuid, slug: frontmatter.slug });
+        return { action: 'update', id: frontmatter.cuid, dryRun: true };
+      }
+
       const updateInput = Object.assign({ id: frontmatter.cuid }, baseInput);
       const id = await updatePost(client, updateInput);
       if (id) return { action: 'update', id };
@@ -73,17 +80,31 @@ async function syncPost(client, { publicationId, frontmatter, body, env = proces
   if (frontmatter.slug) {
     const existingId = await findPostIdBySlug(client, publicationId, frontmatter.slug);
     if (existingId) {
-      const updateInput = Object.assign({ id: existingId }, baseInput);
-      try {
-        const id = await updatePost(client, updateInput);
-        if (id) return { action: 'update', id };
-      } catch (e) {
-        // fall through to publish
-      }
+        console.log(`✏️ Updating post: ${frontmatter.slug}`);
+
+        if (dryRun) {
+          console.log('   ↳ DRY-RUN: updatePost', { id: existingId, slug: frontmatter.slug });
+          return { action: 'update', id: existingId, dryRun: true };
+        }
+
+        const updateInput = Object.assign({ id: existingId }, baseInput);
+        try {
+          const id = await updatePost(client, updateInput);
+          if (id) return { action: 'update', id };
+        } catch (e) {
+          // fall through to publish
+        }
     }
   }
 
   // Publish
+  console.log(`🆕 Creating post: ${frontmatter.slug}`);
+
+  if (dryRun) {
+    console.log('   ↳ DRY-RUN: publishPost', { slug: frontmatter.slug, publicationId });
+    return { action: 'publish', id: 'dry-run', dryRun: true };
+  }
+
   const publishInput = baseInput;
   const id = await publishPost(client, publishInput);
   return { action: 'publish', id };

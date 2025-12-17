@@ -15,7 +15,7 @@ const { splitFrontmatter, validateFrontmatter } = require('./utils');
 /**
  * Ensure series exists (create or update by slug)
  */
-async function ensureSeries(client, seriesFrontmatter, publicationId, env = process.env) {
+async function ensureSeries(client, seriesFrontmatter, publicationId, env = process.env, dryRun = false) {
   validateFrontmatter(seriesFrontmatter, ['name', 'slug']);
 
   const query = `
@@ -48,6 +48,11 @@ async function ensureSeries(client, seriesFrontmatter, publicationId, env = proc
   }
 
   if (existingId) {
+    if (dryRun) {
+      console.log(`📚 DRY-RUN: updateSeries ${seriesFrontmatter.slug}`);
+      return existingId;
+    }
+
     const mutation = `
       mutation ($input: UpdateSeriesInput!) {
         updateSeries(input: $input) {
@@ -71,6 +76,11 @@ async function ensureSeries(client, seriesFrontmatter, publicationId, env = proc
     }
   `;
 
+  if (dryRun) {
+    console.log(`📚 DRY-RUN: createSeries ${seriesFrontmatter.slug}`);
+    return 'dry-run-series';
+  }
+
   const data = await client.gql(mutation, {
     input: baseInput,
   });
@@ -81,7 +91,7 @@ async function ensureSeries(client, seriesFrontmatter, publicationId, env = proc
 /**
  * Attach a post to a series (append-only)
  */
-async function addPostToSeries(client, postId, seriesId) {
+async function addPostToSeries(client, postId, seriesId, dryRun = false) {
   const mutation = `
     mutation ($input: AddPostToSeriesInput!) {
       addPostToSeries(input: $input) {
@@ -89,6 +99,11 @@ async function addPostToSeries(client, postId, seriesId) {
       }
     }
   `;
+
+  if (dryRun) {
+    console.log(`   ↳ DRY-RUN: addPostToSeries`, { postId, seriesId });
+    return;
+  }
 
   await client.gql(mutation, {
     input: { postId, seriesId },
@@ -103,6 +118,7 @@ async function syncSeriesFolder({
   folderPath,
   publicationId,
   syncPost,
+  dryRun = false,
   env = process.env,
 }) {
   const seriesFile = path.join(folderPath, '_series.md');
@@ -118,7 +134,8 @@ async function syncSeriesFolder({
     client,
     seriesFrontmatter,
     publicationId,
-    env
+    env,
+    dryRun
   );
 
   const postFiles = fs
@@ -136,9 +153,10 @@ async function syncSeriesFolder({
       body,
       publicationId,
       env,
+      dryRun,
     });
 
-    await addPostToSeries(client, post.id, seriesId);
+    await addPostToSeries(client, post.id, seriesId, dryRun);
   }
 }
 

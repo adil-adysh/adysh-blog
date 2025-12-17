@@ -25,7 +25,7 @@ function getPublicationId(type, env) {
 /**
  * Sync one root (tech / personal)
  */
-async function syncRoot({ rootPath, publicationId, client, env }) {
+async function syncRoot({ rootPath, publicationId, client, env, dryRun = false }) {
   const entries = fs.readdirSync(rootPath, { withFileTypes: true });
 
   for (const entry of entries) {
@@ -41,6 +41,7 @@ async function syncRoot({ rootPath, publicationId, client, env }) {
         publicationId,
         syncPost,
         env,
+        dryRun,
       });
       continue;
     }
@@ -58,6 +59,7 @@ async function syncRoot({ rootPath, publicationId, client, env }) {
         body,
         publicationId,
         env,
+        dryRun,
       });
     }
   }
@@ -98,7 +100,7 @@ async function runSync(options = {}, env = process.env) {
     }
 
     console.log(`\n📦 Syncing ${type}`);
-    await syncRoot({ rootPath, publicationId, client, env });
+    await syncRoot({ rootPath, publicationId, client, env, dryRun: options.dryRun === true });
   }
 }
 
