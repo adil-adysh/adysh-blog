@@ -10,7 +10,14 @@ const {
   resolveCoverImage,
 } = require('./utils');
 
-const FIND_POST_BY_SLUG = `query FindPostBySlug($publicationId: ID!, $slug: String!) { postBySlug(publicationId: $publicationId, slug: $slug) { id } }`;
+// Use a publication-scoped lookup to avoid deprecated/invalid fields
+const FIND_POST_BY_SLUG = `
+  query FindPostBySlug($publicationId: ID!, $slug: String!) {
+    publication(id: $publicationId) {
+      post(slug: $slug) { id }
+    }
+  }
+`;
 const UPDATE_POST_MUTATION = `mutation UpdatePost($input: UpdatePostInput!) { updatePost(input: $input) { post { id } } }`;
 const PUBLISH_POST_MUTATION = `mutation PublishPost($input: PublishPostInput!) { publishPost(input: $input) { post { id } } }`;
 
@@ -23,6 +30,7 @@ function extractPostIdFromResult(result) {
   if (result.postBySlug && result.postBySlug.id) return result.postBySlug.id;
   if (result.posts && result.posts.length && result.posts[0].id) return result.posts[0].id;
   if (result.postsBySlug && result.postsBySlug.length && result.postsBySlug[0].id) return result.postsBySlug[0].id;
+  if (result.publication && result.publication.post && result.publication.post.id) return result.publication.post.id;
   return null;
 }
 
