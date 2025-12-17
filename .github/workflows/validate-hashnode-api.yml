@@ -6,41 +6,57 @@ on:
     # Daily check — catches silent API changes
     - cron: "0 2 * * *"
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - "validate-hashnode-series.ps1"
       - ".github/workflows/validate-hashnode-api.yml"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: hashnode-contract-validation
+  cancel-in-progress: true
+
 jobs:
   validate:
+    name: Validate Hashnode API Contract
     runs-on: ubuntu-latest
+
     env:
       HASHNODE_KEY: ${{ secrets.HASHNODE_KEY }}
 
     steps:
+      # ----------------------------------
+      # Checkout
+      # ----------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      # PowerShell (`pwsh`) is preinstalled on GitHub runners; no setup step required
-
+      # ----------------------------------
+      # Preflight validation
+      # ----------------------------------
       - name: Verify Hashnode API key exists
         shell: pwsh
         run: |
           if (-not $env:HASHNODE_KEY) {
             Write-Error "HASHNODE_KEY secret is missing"
+            exit 1
           }
           Write-Host "✅ HASHNODE_KEY found"
 
-      # -------------------------------
-      # Always fetch latest schema
-      # -------------------------------
+      # ----------------------------------
+      # Fetch latest GraphQL schema
+      # ----------------------------------
       - name: Fetch latest Hashnode GraphQL schema
+        id: fetch-schema
         shell: pwsh
         run: |
           $headers = @{
-            "Authorization" = "Bearer $env:HASHNODE_KEY"
-            "Content-Type"  = "application/json"
+            Authorization = "Bearer $env:HASHNODE_KEY"
+            "Content-Type" = "application/json"
           }
 
           $query = @"
@@ -50,7 +66,6 @@ jobs:
                 kind
                 name
                 description
-                # For object types
                 fields {
                   name
                   description
@@ -68,11 +83,14 @@ jobs:
                     }
                   }
                 }
-                # For input object types
                 inputFields {
                   name
                   description
-                  type { kind name ofType { kind name ofType { kind name } } }
+                  type {
+                    kind
+                    name
+                    ofType { kind name ofType { kind name } }
+                  }
                 }
                 enumValues { name }
               }
@@ -82,21 +100,33 @@ jobs:
 
           $body = @{ query = $query } | ConvertTo-Json -Depth 10
 
-          $response = Invoke-RestMethod `
-            -Uri https://gql.hashnode.com `
-            -Method POST `
-            -Headers $headers `
-            -Body $body
+          try {
+            $response = Invoke-RestMethod `
+              -Uri "https://gql.hashnode.com" `
+              -Method POST `
+              -Headers $headers `
+              -Body $body `
+              -TimeoutSec 30
+          }
+          catch {
+            Write-Error "Failed to fetch GraphQL schema from Hashnode"
+            throw
+          }
 
-          # Overwrite schema every run (never trust committed copy)
-          $response.data | ConvertTo-Json -Depth 25 `
-            | Out-File hashnode-schema.graphql -Encoding utf8
+          if (-not $response.data.__schema) {
+            Write-Error "Invalid introspection response: __schema missing"
+            exit 1
+          }
+
+          $response.data |
+            ConvertTo-Json -Depth 25 |
+            Out-File hashnode-schema.graphql -Encoding utf8
 
           Write-Host "✅ Latest Hashnode schema fetched"
 
-      # -------------------------------
-      # Validate assumptions
-      # -------------------------------
+      # ----------------------------------
+      # Validate API assumptions
+      # ----------------------------------
       - name: Validate Hashnode API contract
         shell: pwsh
         run: |
@@ -104,6 +134,9 @@ jobs:
             -SchemaPath hashnode-schema.graphql `
             -PostsPath posts
 
+      # ----------------------------------
+      # Failure diagnostics
+      # ----------------------------------
       - name: Upload schema artifact on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -112,6 +145,10 @@ jobs:
           path: hashnode-schema.graphql
           retention-days: 7
 
+      # ----------------------------------
+      # Success signal
+      # ----------------------------------
       - name: Validation success
         if: success()
-        run: echo "🎉 Hashnode API contract validated successfully"
+        run: |
+          echo "🎉 Hashnode API contract validated successfully"
