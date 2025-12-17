@@ -104,6 +104,14 @@ jobs:
             -SchemaPath hashnode-schema.graphql `
             -PostsPath posts
 
+      - name: Upload schema artifact on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hashnode-schema-on-failure
+          path: hashnode-schema.graphql
+          retention-days: 7
+
       - name: Validation success
         if: success()
         run: echo "🎉 Hashnode API contract validated successfully"

@@ -150,6 +150,46 @@ Validate-InputContract `
   -Allowed  @("postId", "seriesId")
 
 # -------------------------
+# 4️⃣b Validate enum values
+# -------------------------
+function Validate-Enum {
+  param (
+    [string]$EnumName,
+    [string[]]$RequiredValues
+  )
+
+  $enum = $schema.types | Where-Object { $_.name -eq $EnumName -and $_.kind -eq "ENUM" }
+  if (-not $enum) {
+    Fail "Enum not found: $EnumName"
+  }
+
+  $values = @()
+  if ($enum.enumValues) {
+    $values = $enum.enumValues | ForEach-Object { $_.name }
+  }
+
+  if (-not $values -or $values.Count -eq 0) {
+    Dump-Type $enum "$EnumName (no enumValues)"
+    Fail "$EnumName has no enum values"
+  }
+
+  foreach ($v in $RequiredValues) {
+    if ($values -notcontains $v) {
+      Write-Host "Detected enum values for $EnumName: $($values -join ', ')" -ForegroundColor Yellow
+      Dump-Type $enum "$EnumName (missing required enum value)"
+      Fail "$EnumName missing required value: $v"
+    }
+  }
+
+  Pass "$EnumName enum validated"
+}
+
+# Validate series display order enum
+Validate-Enum `
+  -EnumName "SeriesSortOrder" `
+  -RequiredValues @("OLDEST_FIRST", "NEWEST_FIRST")
+
+# -------------------------
 # 5️⃣ Cover image support
 # -------------------------
 $coverType = $schema.types | Where-Object { $_.name -eq "CoverImageOptionsInput" }
