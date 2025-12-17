@@ -175,7 +175,7 @@ function Validate-Enum {
 
   foreach ($v in $RequiredValues) {
     if ($values -notcontains $v) {
-      Write-Host "Detected enum values for $EnumName: $($values -join ', ')" -ForegroundColor Yellow
+      Write-Host "Detected enum values for ${EnumName}: $($values -join ', ')" -ForegroundColor Yellow
       Dump-Type $enum "$EnumName (missing required enum value)"
       Fail "$EnumName missing required value: $v"
     }
@@ -184,7 +184,6 @@ function Validate-Enum {
   Pass "$EnumName enum validated"
 }
 
-# Validate series display order enum
 Validate-Enum `
   -EnumName "SeriesSortOrder" `
   -RequiredValues @("OLDEST_FIRST", "NEWEST_FIRST")
