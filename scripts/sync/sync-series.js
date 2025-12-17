@@ -14,6 +14,7 @@ const { splitFrontmatter, validateFrontmatter } = require('./utils');
 
 /**
  * Ensure series exists (create or update by slug)
+ * Returns { seriesId, existingPostIds }
  */
 async function ensureSeries(client, seriesFrontmatter, publicationId, env = process.env, dryRun = false) {
   validateFrontmatter(seriesFrontmatter, ['name', 'slug']);
@@ -22,16 +23,31 @@ async function ensureSeries(client, seriesFrontmatter, publicationId, env = proc
     query ($slug: String!) {
       series(slug: $slug) {
         id
+        posts(first: 50) {
+          edges {
+            node {
+              id
+            }
+          }
+        }
       }
     }
   `;
 
   let existingId = null;
-  try {
-    const data = await client.gql(query, { slug: seriesFrontmatter.slug });
-    existingId = data?.series?.id ?? null;
-  } catch {
-    existingId = null;
+  let existingPostIds = [];
+  
+  if (!dryRun) {
+    try {
+      const data = await client.gql(query, { slug: seriesFrontmatter.slug });
+      existingId = data?.series?.id ?? null;
+      if (data?.series?.posts?.edges) {
+        existingPostIds = data.series.posts.edges.map(edge => edge.node.id);
+      }
+    } catch {
+      existingId = null;
+      existingPostIds = [];
+    }
   }
 
   const baseInput = {
@@ -44,13 +60,13 @@ async function ensureSeries(client, seriesFrontmatter, publicationId, env = proc
 
   if (seriesFrontmatter.coverImage) {
     const { assetPathToRawUrl } = require('./utils');
-    baseInput.coverImage = assetPathToRawUrl(seriesFrontmatter.coverImage, env);
+    baseInput.coverImage = assetPathToRawUrl(seriesFrontmatter.coverImage, env, dryRun);
   }
 
   if (existingId) {
     if (dryRun) {
       console.log(`📚 DRY-RUN: updateSeries ${seriesFrontmatter.slug}`);
-      return existingId;
+      return { seriesId: 'dry-run-series', existingPostIds: [] };
     }
 
     const mutation = `
@@ -65,7 +81,7 @@ async function ensureSeries(client, seriesFrontmatter, publicationId, env = proc
       input: { id: existingId, ...baseInput },
     });
 
-    return data.updateSeries.series.id;
+    return { seriesId: data.updateSeries.series.id, existingPostIds };
   }
 
   const mutation = `
@@ -78,14 +94,14 @@ async function ensureSeries(client, seriesFrontmatter, publicationId, env = proc
 
   if (dryRun) {
     console.log(`📚 DRY-RUN: createSeries ${seriesFrontmatter.slug}`);
-    return 'dry-run-series';
+    return { seriesId: 'dry-run-series', existingPostIds: [] };
   }
 
   const data = await client.gql(mutation, {
     input: baseInput,
   });
 
-  return data.createSeries.series.id;
+  return { seriesId: data.createSeries.series.id, existingPostIds: [] };
 }
 
 /**
@@ -130,7 +146,7 @@ async function syncSeriesFolder({
   const rawSeries = fs.readFileSync(seriesFile, 'utf8');
   const { frontmatter: seriesFrontmatter } = splitFrontmatter(rawSeries);
 
-  const seriesId = await ensureSeries(
+  const { seriesId, existingPostIds } = await ensureSeries(
     client,
     seriesFrontmatter,
     publicationId,
@@ -156,7 +172,12 @@ async function syncSeriesFolder({
       dryRun,
     });
 
-    await addPostToSeries(client, post.id, seriesId, dryRun);
+    // Only add post if it's not already in the series
+    if (!existingPostIds.includes(post.id)) {
+      await addPostToSeries(client, post.id, seriesId, dryRun);
+    } else if (!dryRun) {
+      console.log(`   ↳ Post already in series, skipping`);
+    }
   }
 }
 

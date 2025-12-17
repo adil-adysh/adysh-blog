@@ -61,14 +61,18 @@ function validateFrontmatter(fm, required, context = '') {
  *
  * @param {string} assetPath
  * @param {object} env
+ * @param {boolean} dryRun - if true, use placeholder URLs when env vars missing
  */
-function assetPathToRawUrl(assetPath, env = process.env) {
+function assetPathToRawUrl(assetPath, env = process.env, dryRun = false) {
   if (!assetPath) return null;
 
   const repo = env.GITHUB_REPOSITORY;
   const sha = env.GITHUB_SHA;
 
   if (!repo || !sha) {
+    if (dryRun) {
+      return `https://raw.githubusercontent.com/[REPO]/[SHA]/${assetPath}`;
+    }
     throw new Error('GITHUB_REPOSITORY and GITHUB_SHA are required');
   }
 
@@ -102,12 +106,12 @@ function normalizeTags(tags) {
  * - cover
  * - coverImage
  */
-function resolveCoverImage(frontmatter, env) {
+function resolveCoverImage(frontmatter, env, dryRun = false) {
   const cover = frontmatter.cover || frontmatter.coverImage;
   if (!cover) return null;
 
   return {
-    coverImageURL: assetPathToRawUrl(cover, env),
+    coverImageURL: assetPathToRawUrl(cover, env, dryRun),
   };
 }
 

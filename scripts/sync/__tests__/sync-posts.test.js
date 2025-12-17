@@ -97,9 +97,6 @@ describe('sync-posts', () => {
   test('dry-run skips publish and logs intent', async () => {
     const client = { gql: jest.fn() };
 
-    // find by slug -> returns null
-    client.gql.mockResolvedValueOnce({});
-
     const frontmatter = { title: 'T', slug: 's', tags: ['a'] };
     const body = 'body';
 
@@ -111,8 +108,8 @@ describe('sync-posts', () => {
     expect(res.dryRun).toBe(true);
     expect(res.id).toBe('dry-run');
 
-    // Only slug lookup was performed
-    expect(client.gql).toHaveBeenCalledTimes(1);
+    // No API calls should be made in dry-run mode
+    expect(client.gql).toHaveBeenCalledTimes(0);
     expect(log).toHaveBeenCalled();
 
     log.mockRestore();

@@ -17,7 +17,7 @@ const HASHNODE_GQL_ENDPOINT = 'https://gql.hashnode.com';
  */
 function createHashnodeClient(token) {
   if (!token) {
-    throw new Error('HASHNODE_PAT is required');
+    throw new Error("HASHNODE_PAT is required — pass a token to createHashnodeClient(token) or set the environment variable HASHNODE_PAT.\n\nExamples:\n  PowerShell: $env:HASHNODE_PAT = 'your_token'\n  Bash: export HASHNODE_PAT=your_token\n");
   }
 
   /**

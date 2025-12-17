@@ -62,9 +62,10 @@ describe('sync-series', () => {
       slug: 'test-series',
     };
 
-    const id = await ensureSeries(client, seriesFm, publicationId, env);
+    const result = await ensureSeries(client, seriesFm, publicationId, env);
 
-    expect(id).toBe('series-id');
+    expect(result.seriesId).toBe('series-id');
+    expect(result.existingPostIds).toEqual([]);
     expect(client.gql).toHaveBeenCalled();
   });
 
@@ -160,9 +161,8 @@ First body`
     const addCalls = client.gql.mock.calls.filter(call => call[0].includes('addPostToSeries'));
     expect(addCalls.length).toBe(0);
 
-    // ensureSeries should have been called for lookup only
-    // initial lookup is one call
-    expect(client.gql.mock.calls.length).toBeGreaterThanOrEqual(1);
+    // In dry-run mode, no GraphQL calls should be made at all
+    expect(client.gql.mock.calls.length).toBe(0);
     expect(log).toHaveBeenCalled();
 
     log.mockRestore();

@@ -70,11 +70,19 @@ async function syncRoot({ rootPath, publicationId, client, env, dryRun = false }
  */
 async function runSync(options = {}, env = process.env) {
   const token = env.HASHNODE_PAT;
-  if (!token) {
-    throw new Error('HASHNODE_PAT is required');
-  }
+  let client;
 
-  const client = createHashnodeClient(token);
+  if (!token) {
+    if (options.dryRun === true) {
+      console.log('⚠️ No HASHNODE_PAT found — running in dry-run mode without live API. Read-only lookups will be simulated as empty.');
+      // Stub client: return empty data for any query (simulates "not found")
+      client = { gql: async () => ({}) };
+    } else {
+      throw new Error("HASHNODE_PAT is required — set it as an environment variable.\n\nExamples:\n  PowerShell: $env:HASHNODE_PAT = 'your_token'\n  Bash: export HASHNODE_PAT=your_token\n\nIn CI, set a repo secret named \"HASHNODE_PAT\". For a safe preview, run `npx hashnode-sync --dry-run`.");
+    }
+  } else {
+    client = createHashnodeClient(token);
+  }
 
   const postsRoot = path.resolve(process.cwd(), 'posts');
   if (!fs.existsSync(postsRoot)) {

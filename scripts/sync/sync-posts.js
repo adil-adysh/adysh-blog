@@ -48,14 +48,40 @@ async function publishPost(client, input) {
  *  - Else, try find by slug -> update
  *  - Fallback to publish
  */
-async function syncPost(client, { publicationId, frontmatter, body, env = process.env, dryRun = false }) {
+async function syncPost() {
+  // Support both call styles:
+  // 1) syncPost(client, { publicationId, frontmatter, body, env, dryRun })
+  // 2) syncPost({ client, publicationId, frontmatter, body, env, dryRun })
+
+  let client;
+  let params = {};
+
+  if (arguments.length === 2) {
+    client = arguments[0];
+    params = arguments[1] || {};
+  } else if (arguments.length === 1 && arguments[0] && arguments[0].client) {
+    params = Object.assign({}, arguments[0]);
+    client = params.client;
+    delete params.client;
+  } else {
+    throw new Error('Invalid arguments to syncPost');
+  }
+
+  const {
+    publicationId,
+    frontmatter,
+    body,
+    env = process.env,
+    dryRun = false,
+  } = params;
+
   const baseInput = {
     publicationId,
     title: frontmatter.title,
     contentMarkdown: body,
     slug: frontmatter.slug,
     tags: normalizeTags(frontmatter.tags),
-    coverImageOptions: resolveCoverImage(frontmatter, env),
+    coverImageOptions: resolveCoverImage(frontmatter, env, dryRun),
   };
 
   // Try update by cuid if present
@@ -77,7 +103,7 @@ async function syncPost(client, { publicationId, frontmatter, body, env = proces
   }
 
   // Try find by slug
-  if (frontmatter.slug) {
+  if (frontmatter.slug && !dryRun) {
     const existingId = await findPostIdBySlug(client, publicationId, frontmatter.slug);
     if (existingId) {
         console.log(`✏️ Updating post: ${frontmatter.slug}`);
