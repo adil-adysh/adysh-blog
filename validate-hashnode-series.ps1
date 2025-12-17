@@ -160,6 +160,7 @@ function Validate-Enum {
 
   $enum = $schema.types | Where-Object { $_.name -eq $EnumName -and $_.kind -eq "ENUM" }
   if (-not $enum) {
+    Write-Host "ℹ️ SortOrder is generic (asc/dsc). Series display semantics are UI-mapped." -ForegroundColor Yellow
     Fail "Enum not found: $EnumName"
   }
 
@@ -169,6 +170,7 @@ function Validate-Enum {
   }
 
   if (-not $values -or $values.Count -eq 0) {
+    Write-Host "ℹ️ SortOrder is generic (asc/dsc). Series display semantics are UI-mapped." -ForegroundColor Yellow
     Dump-Type $enum "$EnumName (no enumValues)"
     Fail "$EnumName has no enum values"
   }
@@ -185,8 +187,8 @@ function Validate-Enum {
 }
 
 Validate-Enum `
-  -EnumName "SeriesSortOrder" `
-  -RequiredValues @("OLDEST_FIRST", "NEWEST_FIRST")
+  -EnumName "SortOrder" `
+  -RequiredValues @("asc", "dsc")
 
 # -------------------------
 # 5️⃣ Cover image support
