@@ -98,13 +98,24 @@ $expectedSeriesFields = @(
 
 if ($isJson) {
   $inputType = $schema.types | Where-Object { $_.name -eq 'CreateSeriesInput' -and $_.kind -like '*INPUT*' }
-  if (-not $inputType) { Fail "CreateSeriesInput type not found in schema" }
-  $inputFieldNames = @()
-  if ($inputType.inputFields) { $inputFieldNames = $inputType.inputFields | ForEach-Object { $_.name }
+  if (-not $inputType) {
+    Write-Host "Unable to find 'CreateSeriesInput' in schema. Listing candidate input types and their fields for diagnosis:`n" -ForegroundColor Yellow
+    $candidates = $schema.types | Where-Object { $_.kind -match 'INPUT_OBJECT' } | Select-Object name,inputFields
+    foreach ($c in $candidates) {
+      Write-Host "- $($c.name)"
+      if ($c.inputFields) {
+        $names = $c.inputFields | ForEach-Object { $_.name } | Sort-Object
+        Write-Host "    fields: $($names -join ', ')"
+      }
+    }
+    Fail "CreateSeriesInput type not found in schema"
   }
+  $inputFieldNames = @()
+  if ($inputType.inputFields) { $inputFieldNames = $inputType.inputFields | ForEach-Object { $_.name } }
   foreach ($field in $expectedSeriesFields) {
     $f = $field.TrimEnd(':')
     if ($inputFieldNames -notcontains $f) {
+      Write-Host "Detected fields on CreateSeriesInput: $($inputFieldNames -join ', ')" -ForegroundColor Yellow
       Fail "CreateSeriesInput missing field: $f"
     }
   }
