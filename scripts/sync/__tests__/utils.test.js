@@ -99,7 +99,10 @@ body`;
   describe('normalizeTags', () => {
     test('converts string tags to Hashnode format', () => {
       const tags = normalizeTags(['a', 'b']);
-      expect(tags).toEqual([{ name: 'a' }, { name: 'b' }]);
+      expect(tags).toEqual([
+        { name: 'a', slug: 'a' },
+        { name: 'b', slug: 'b' },
+      ]);
     });
 
     test('returns empty array for undefined', () => {

@@ -30,7 +30,7 @@ describe('sync-posts', () => {
     expect(client.gql).toHaveBeenCalledTimes(2);
     const [, publishCall] = client.gql.mock.calls[1];
     // client.gql(query, variables) -> variables is the second arg
-    expect(publishCall.input.tags).toEqual([{ name: 'a' }]);
+    expect(publishCall.input.tags).toEqual([{ name: 'a', slug: 'a' }]);
     expect(publishCall.input.coverImageOptions.coverImageURL).toContain('assets/c.png');
   });
 

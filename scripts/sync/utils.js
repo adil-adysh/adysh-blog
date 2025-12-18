@@ -198,7 +198,14 @@ function normalizeTags(tags) {
     if (typeof tag !== 'string') {
       throw new Error('tag values must be strings');
     }
-    return { name: tag };
+    // include a slug to satisfy Hashnode TagInput requirements
+    const name = tag.trim();
+    const slug = String(name)
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-');
+    return { name, slug };
   });
 }
 
