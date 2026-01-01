@@ -53,3 +53,4 @@ schema/hashnode-schema.json
 *.swp
 *.swo
 *.log
+**/.hashnode/

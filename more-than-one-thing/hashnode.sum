@@ -1,0 +1,14 @@
+version: 1
+blog:
+    publication_id: 6868ff285f48b91eefdfb337
+    publication_slug: https://more-then-one-thing.hashnode.dev
+series:
+    understanding-yourself-without-losing-yourself:
+        series_id: 69413d8d425f72122aad81ed
+        name: Understanding Yourself Without Losing Yourself
+        slug: understanding-yourself-without-losing-yourself
+articles:
+    2025/08/how-to-stay-motivated-the-surprising-truth-about-your-beliefs.md:
+        post_id: 689503a1a3f03f37bbbdb7d0
+        checksum: 61a252fb12094bd8dedc12e3b65c57b45ea2f15e3084802ee83af89da01960b4
+        slug: how-to-stay-motivated-the-surprising-truth-about-your-beliefs
